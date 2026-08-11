@@ -24,6 +24,7 @@ $VENDAS_ID = '1BJ-T_Aj5oeMge667xWtX_SfGCSiibcFo7l0yLWTt_BQ'; $VENDAS_GID = '0'  
 $TAX = 1.1385                 # imposto Meta (+13,85%) aplicado em TODO gasto
 $CAMP_FRAG = 'fdi-vsl'        # funil VSL = utm_campaign contem "fdi-vsl"
 $SENT = 'SEM_RASTREIO'
+$US = [char]31   # separador de chave (Unit Separator). NAO usar backtick-u em string: quebra o parser no pwsh7 (vira escape Unicode)
 
 function Get-Sheet($id,$gid,$out){
   $url = "https://docs.google.com/spreadsheets/d/$id/gviz/tq?tqx=out:csv&gid=$gid"
@@ -152,7 +153,7 @@ foreach($r in $md){ if($r.Count -le $Q_AD){continue}
   if($cn -ne ''){ $k=Deaccent $cn; if(-not $campDe.ContainsKey($k)){$campDe[$k]=$cn} }
   if($sn -ne ''){ $k=Deaccent $sn; if(-not $setDe.ContainsKey($k)){$setDe[$k]=$sn} }
   if($an -ne ''){ $k=Deaccent $an; if(-not $adDe.ContainsKey($k)){$adDe[$k]=$an} }
-  if($cn -ne '' -and $sn -ne ''){ $qPair["$cn`u$sn"]=$true; if($an -ne ''){ $qTriple["$cn`u$sn`u$an"]=$true } }
+  if($cn -ne '' -and $sn -ne ''){ $qPair[($cn+$US+$sn)]=$true; if($an -ne ''){ $qTriple[($cn+$US+$sn+$US+$an)]=$true } }
   if($an -ne '' -and $sn -ne '' -and $cn -ne ''){ $k=Deaccent $an; if(-not $adToTriple.ContainsKey($k)){ $adToTriple[$k]=@{camp=$cn;set=$sn;ad=$an} } }
   if($sn -ne '' -and $cn -ne ''){ $k=Deaccent $sn; if(-not $setToPair.ContainsKey($k)){ $setToPair[$k]=@{camp=$cn;set=$sn} } }
 }
@@ -176,7 +177,7 @@ foreach($r in $md){ if($r.Count -le $Q_AD){continue}
   $mv= if($Q_PVAL -ge 0){ MoneyBR $r[$Q_PVAL] } else { 0.0 }
   $cn=Norm $r[$Q_CAMP]; $sn=Norm $r[$Q_SET]; $an=Norm $r[$Q_AD]
   $o=_gd $d; $o.spendRaw+=$spRaw;$o.spend+=$sp;$o.impr+=$im;$o.reach+=$rc;$o.clicks+=$ck;$o.lpv+=$lp;$o.v3+=$v3;$o.v75+=$v75;$o.checkout+=$chk;$o.mpur+=$mp;$o.mrev+=$mv
-  $g=_gg "$d`u$cn`u$sn`u$an" $d $cn $sn $an; $g.spendRaw+=$spRaw;$g.spend+=$sp;$g.impr+=$im;$g.reach+=$rc;$g.clicks+=$ck;$g.lpv+=$lp;$g.v3+=$v3;$g.v75+=$v75;$g.checkout+=$chk;$g.mpur+=$mp;$g.mrev+=$mv
+  $g=_gg ($d+$US+$cn+$US+$sn+$US+$an) $d $cn $sn $an; $g.spendRaw+=$spRaw;$g.spend+=$sp;$g.impr+=$im;$g.reach+=$rc;$g.clicks+=$ck;$g.lpv+=$lp;$g.v3+=$v3;$g.v75+=$v75;$g.checkout+=$chk;$g.mpur+=$mp;$g.mrev+=$mv
 }
 $qDays=@($qDaysSet.Keys | Sort-Object)
 $qMin= if($qDays.Count){ $qDays[0] } else { '' }
@@ -195,8 +196,8 @@ foreach($s in $vslSales){
   if($cName -ne ''){
     $sName=MatchName $s.adset $setDe
     $aName=MatchName $s.ad $adDe
-    if($sName -eq '' -or -not $qPair.ContainsKey("$cName`u$sName")){ $sName=$SENT; $aName=$SENT }
-    elseif($aName -eq '' -or -not $qTriple.ContainsKey("$cName`u$sName`u$aName")){ $aName=$SENT }
+    if($sName -eq '' -or -not $qPair.ContainsKey(($cName+$US+$sName))){ $sName=$SENT; $aName=$SENT }
+    elseif($aName -eq '' -or -not $qTriple.ContainsKey(($cName+$US+$sName+$US+$aName))){ $aName=$SENT }
     $attr++
   } else {
     $adk=Deaccent $s.ad; $setk=Deaccent $s.adset
@@ -204,7 +205,7 @@ foreach($s in $vslSales){
     elseif($setk -ne '' -and $setToPair.ContainsKey($setk)){ $t=$setToPair[$setk]; $cName=$t.camp; $sName=$t.set; $aName=$SENT; $attr++ }
     else { $cName=$SENT; $sName=$SENT; $aName=$SENT }
   }
-  $g=_gg "$($s.date)`u$cName`u$sName`u$aName" $s.date $cName $sName $aName; $g.sales++; $g.rev+=$s.rev
+  $g=_gg ($s.date+$US+$cName+$US+$sName+$US+$aName) $s.date $cName $sName $aName; $g.sales++; $g.rev+=$s.rev
 }
 
 $dailyArr=@($daily.Values | Sort-Object date)
