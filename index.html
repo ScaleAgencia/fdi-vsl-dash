@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>FDI · VSL — Dashboard de Vendas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet">
+<script>document.write('<link rel="stylesheet" href="styles.css?t='+Date.now()+'">')</script>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="editband">Fórmula dos Investimentos · Funil VSL · Video Sales Letter · Meta Ads</div>
+
+  <header class="top">
+    <div class="brand">
+      <svg class="blogo" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="vg" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#b794ff"/><stop offset=".55" stop-color="#8b5cf6"/><stop offset="1" stop-color="#f6c445"/>
+          </linearGradient>
+        </defs>
+        <rect x="5" y="5" width="54" height="54" rx="15" fill="none" stroke="url(#vg)" stroke-width="4"/>
+        <path d="M26 21 L46 32 L26 43 Z" fill="url(#vg)"/>
+        <circle cx="32" cy="32" r="27" fill="none" stroke="rgba(139,92,246,.18)" stroke-width="1.5"/>
+      </svg>
+      <div>
+        <div class="logo">FDI <span class="vsl">VSL</span></div>
+        <div class="brand-tag"><span class="pill">Fórmula dos Investimentos</span> funil de venda direta · vídeo</div>
+      </div>
+    </div>
+    <div class="top-right">
+      <div class="updated">Atualizado <b id="updated">—</b><span class="live">● ao vivo</span></div>
+      <div class="periods" id="periods"></div>
+    </div>
+  </header>
+
+  <div class="coverage" id="coverage"></div>
+
+  <nav class="tabs" id="tabs">
+    <button class="tab active" data-tab="meta"><span class="tdot" style="background:#8b5cf6"></span>Meta Ads · Funil VSL</button>
+    <button class="tab" data-tab="vendas"><span class="tdot" style="background:#f6c445"></span>Vendas</button>
+  </nav>
+
+  <!-- ============ META ADS (funil VSL) ============ -->
+  <section class="panel-tab" id="tab-meta">
+    <div class="funil-grid">
+      <div class="kpi-col" id="m-kpi"></div>
+      <div class="card" style="margin-bottom:0">
+        <div class="card-h">Funil de vídeo <span class="hint">Meta Ads · imposto incluso · seta = vs. período anterior</span></div>
+        <div id="m-funnel"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h">📹 O que o Meta reportou <span class="hint">números do pixel/gerenciador — referência ao lado das vendas reais da planilha</span></div>
+      <div class="pixel-strip" id="m-pixel"></div>
+    </div>
+
+    <div class="chart-col" style="margin-bottom:16px">
+      <div class="row-2">
+        <div class="card"><div class="card-h">Vendas × Faturamento por dia</div><div id="m-chartSales"></div></div>
+        <div class="card"><div class="card-h">Investimento × ROAS por dia <span class="hint">barras = gasto c/ imposto · linha = ROAS</span></div><div id="m-chartRoas"></div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h">💡 Insights — acelerar &amp; pausar <span class="hint">o que puxa ou derruba o retorno no período</span></div>
+      <div class="ins-grid" id="m-insights"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-h">Visão diária <span class="hint">CPA e ROAS coloridos vs. mediana do período · mais recente no topo</span></div>
+      <div class="table-scroll"><table class="tbl" id="m-daily"></table></div>
+    </div>
+
+    <div class="card">
+      <div class="card-h">Otimização — Campanha › Conjunto › Anúncio
+        <span class="hint">métricas de funil por criativo (CPM · CTR · CPC · Hook · Hold · CPA · ROAS) · clique numa <b>campanha</b> p/ abrir os conjuntos e num <b>conjunto</b> p/ ver os anúncios · ordene por qualquer coluna</span></div>
+      <div class="tree-legend" id="m-treeLegend"></div>
+      <div class="table-scroll"><table class="tbl tree" id="m-tree"></table></div>
+    </div>
+  </section>
+
+  <!-- ============ VENDAS ============ -->
+  <section class="panel-tab hidden" id="tab-vendas">
+    <div class="quad" id="v-quad"></div>
+
+    <div class="row-2">
+      <div class="card">
+        <div class="card-h">Origem das vendas <span class="hint">tráfego pago (Meta) × outros · no período</span></div>
+        <div id="v-split"></div>
+      </div>
+      <div class="card">
+        <div class="card-h">Comparativo por origem <span class="hint">todas as vendas do funil VSL</span></div>
+        <div class="table-scroll"><table class="tbl" id="v-cmp"></table></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h">Vendas por dia <span class="hint">funil VSL · faturamento líquido</span></div>
+      <div id="v-chart"></div>
+    </div>
+
+    <div class="row-2">
+      <div class="card">
+        <div class="card-h">Ranking por campanha <span class="hint">Meta Ads · atribuído por UTM</span></div>
+        <div class="table-scroll"><table class="tbl" id="v-camp"></table></div>
+      </div>
+      <div class="card">
+        <div class="card-h">Ranking por anúncio <span class="hint">Meta Ads · atribuído por UTM</span></div>
+        <div class="table-scroll"><table class="tbl" id="v-ad"></table></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h">Visão diária — todas as vendas <span class="hint">mais recente no topo</span></div>
+      <div class="table-scroll"><table class="tbl" id="v-daily"></table></div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span>FDI · VSL · dados agregados, somente leitura · imposto Meta ×<b id="taxf">1,1385</b> incluso no investimento e em todas as métricas · faturamento = valor líquido da venda · vendas atribuídas por UTM (campanha, conjunto e criativo) · funil de vídeo com métricas do próprio Meta</span>
+  </footer>
+</div>
+
+<script>document.write('<script src="data.js?t='+Date.now()+'"><\/script>')</script>
+<script>document.write('<script src="app.js?t='+Date.now()+'"><\/script>')</script>
+</body>
+</html>
