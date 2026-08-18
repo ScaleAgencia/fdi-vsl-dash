@@ -114,6 +114,9 @@ b{font-weight:700}
 .pxl .p-l{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;font-weight:600}
 .pxl .p-v{font-size:20px;font-weight:800;letter-spacing:-.4px;margin-top:4px;color:var(--cy2)}
 .pxl .p-s{font-size:10.5px;color:var(--muted2);margin-top:3px}
+.pxl.gold{border-color:rgba(246,196,69,.32);background:linear-gradient(135deg,var(--gold-dim),transparent),var(--panel)}
+.pxl.gold .p-v{color:var(--gold2)}
+.upsell-card{border-color:rgba(246,196,69,.34);background:linear-gradient(180deg,rgba(246,196,69,.05),transparent),linear-gradient(180deg,var(--panel),var(--bg2))}
 
 /* ---------- charts ---------- */
 .chart svg{width:100%;height:auto;display:block}

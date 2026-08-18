@@ -33,6 +33,7 @@ function prepMeta(S){
 var META = prepMeta(D.meta);
 var VEN = D.vendas || {}; VEN.daily=arr(VEN.daily); VEN.byCamp=arr(VEN.byCamp); VEN.byAd=arr(VEN.byAd);
 var PRODUTO = VEN.product || 'Fórmula dos Investimentos';
+var UPPROD = VEN.upsellProduct || 'Prosperus';
 
 /* ---------- período global ---------- */
 function boundsOf(){
@@ -59,7 +60,7 @@ function rangeFor(k){
 function prevRange(rng){ var len=daysBetween(rng[0],rng[1])+1; var pe=addDays(rng[0],-1); return [addDays(pe,-(len-1)),pe]; }
 
 /* =================== META: agregação =================== */
-var METS=['spend','spendRaw','impr','reach','clicks','lpv','v3','v75','checkout','mpur','mrev','sales','rev'];
+var METS=['spend','spendRaw','impr','reach','clicks','lpv','v3','v75','checkout','mpur','mrev','sales','rev','upSales','upRev'];
 function aggMeta(rng){ var o={}; METS.forEach(function(k){o[k]=0;});
   META.daily.forEach(function(d){ if(!inRange(d.date,rng))return; METS.forEach(function(k){o[k]+=(d[k]||0);}); }); return o; }
 function metaDays(rng){ return META.daily.filter(function(d){return isDate(d.date)&&inRange(d.date,rng);}).sort(function(a,b){return a.date.localeCompare(b.date);}); }
@@ -75,6 +76,7 @@ function kpiCard(cls,label,val,subs){ return '<div class="kpi-card'+(cls?' '+cls
 function renderKpi(a,p){
   var roas=dv(a.rev,a.spend), lucro=a.rev-a.spend, cac=dv(a.spend,a.sales), ticket=dv(a.rev,a.sales);
   var taxaCompra=dv(a.sales,a.checkout);
+  var fatTot=a.rev+(a.upRev||0), roasUp=dv(fatTot,a.spend), lucroTot=fatTot-a.spend;
   var hero='<div class="kpi-hero"><div class="h-lab">Investimento com imposto</div>'
     +'<div class="h-val">'+money(a.spend)+'</div>'
     +'<div class="h-foot"><span>Gerenciador <b>'+money0(a.spendRaw)+'</b></span>'
@@ -86,10 +88,12 @@ function renderKpi(a,p){
   cards+=kpiCard('hl','Vendas',intf(a.sales),
     subRow('CPA / CAC', a.sales?money(cac):'—', trendHTML(cac,dv(p.spend,p.sales),false))
     + subRow('Checkout → venda', a.checkout?pct(taxaCompra*100):'—', trendHTML(taxaCompra,dv(p.sales,p.checkout),true)));
-  var rc=roasClass(roas), barw=clamp(roas/2)*100, barcol=roas>=1?COL.gold:(roas>=0.8?COL.gold:'#ff5c7a');
+  var rc=roasClass(roasUp), barw=clamp(roasUp/2)*100, barcol=roasUp>=1?COL.gold:(roasUp>=0.8?COL.gold:'#ff5c7a');
+  var upRow=(a.upRev>0)?subRow('c/ upsell ('+esc(UPPROD)+')', '<span style="color:var(--gold2)">R$ '+roasf(roasUp)+'</span>', ''):'';
   cards+=kpiCard('gold','ROAS c/ imposto',roasf(roas),
-    subRow('Retorno por R$ 1', 'R$ '+roasf(roas), trendHTML(roas,dv(p.rev,p.spend),true))
-    + '<div class="sub-row"><span class="s-l">break-even (1,00)</span><span class="s-v">'+(roas>=1?'✓ no lucro':pct(roas*100)+' do equilíbrio')+'</span></div>'
+    subRow('Retorno por R$ 1 (front-end)', 'R$ '+roasf(roas), trendHTML(roas,dv(p.rev,p.spend),true))
+    + upRow
+    + '<div class="sub-row"><span class="s-l">break-even (1,00)</span><span class="s-v">'+(roasUp>=1?'✓ no lucro':pct(roasUp*100)+' do equilíbrio')+'</span></div>'
     + '<div class="mini-bar"><span style="width:'+barw.toFixed(0)+'%;background:'+barcol+'"></span></div>');
   el('m-kpi').innerHTML=hero+cards;
 }
@@ -103,6 +107,20 @@ function renderPixel(a){
     +pxl('Compras (pixel Meta)', intf(a.mpur), '<b>'+intf(a.sales)+'</b> venda(s) confirmada(s) na planilha')
     +pxl('Valor de conversão', money0(a.mrev), 'receita que o Meta atribui ao pixel')
     +pxl('ROAS pixel c/ imposto', a.spend>0?roasf(roasPix):'—', a.mpur?('custo/compra '+money0(cpaPix)):'sem compras no pixel');
+}
+
+/* =================== UPSELL (Prosperus) =================== */
+function pxlG(l,v,s){ return '<div class="pxl gold"><div class="p-l">'+l+'</div><div class="p-v">'+v+'</div><div class="p-s">'+s+'</div></div>'; }
+function renderUpsell(a){
+  var card=el('m-upsell-card'); if(!card) return;
+  if(!(a.upSales>0) && !(a.upRev>0)){ card.style.display='none'; return; }
+  card.style.display='';
+  var take=dv(a.upSales,a.sales)*100, ticket=dv(a.upRev,a.upSales), fatTot=a.rev+a.upRev, roasUp=dv(fatTot,a.spend), roasFe=dv(a.rev,a.spend);
+  el('m-upsell').innerHTML=
+    pxlG('Upsells', intf(a.upSales), 'take-rate '+pct(take)+' das '+intf(a.sales)+' vendas front-end')
+    +pxlG('Faturamento upsell', money0(a.upRev), 'ticket '+(a.upSales?money(ticket):'—'))
+    +pxlG('Faturamento total', money0(fatTot), 'front-end '+money0(a.rev)+' + upsell '+money0(a.upRev))
+    +pxlG('ROAS c/ upsell', a.spend>0?roasf(roasUp):'—', 'só front-end era '+roasf(roasFe));
 }
 
 /* =================== FUNNEL (VSL, 7 estágios) =================== */
@@ -189,8 +207,8 @@ function renderDaily(rng){
   var rows=metaDays(rng).slice().sort(function(a,b){return b.date.localeCompare(a.date);});
   var maxS=Math.max.apply(null,rows.map(function(r){return r.spend||0;}).concat([1]));
   var medCac=median(rows.map(function(r){return r.sales>0?dv(r.spend,r.sales):null;}));
-  var head='<thead><tr><th>Dia</th><th>Investimento</th><th>Impr.</th><th>Vídeo 3s</th><th>Cliques</th><th>LPV</th><th>Vendas</th><th>CPA</th><th>Faturamento</th><th>ROAS</th><th>Lucro</th></tr></thead>';
-  var body=rows.map(function(r){ var roas=dv(r.rev,r.spend), cac=r.sales>0?dv(r.spend,r.sales):null, lucro=r.rev-r.spend;
+  var head='<thead><tr><th>Dia</th><th>Investimento</th><th>Impr.</th><th>Vídeo 3s</th><th>Cliques</th><th>LPV</th><th>Vendas</th><th>Upsell</th><th>CPA</th><th>Faturamento</th><th>Fat. Total</th><th>ROAS</th><th>Lucro</th></tr></thead>';
+  var body=rows.map(function(r){ var fatT=r.rev+(r.upRev||0), roas=dv(r.rev,r.spend), cac=r.sales>0?dv(r.spend,r.sales):null, lucro=fatT-r.spend;
     return '<tr><td>'+fmtBR(r.date)+'</td>'
       +'<td class="num"><span class="heatcell" style="'+heatBg('167,139,250',r.spend/maxS)+'">'+money0(r.spend)+'</span></td>'
       +'<td class="num">'+intf(r.impr)+'</td>'
@@ -198,13 +216,15 @@ function renderDaily(rng){
       +'<td class="num">'+intf(r.clicks)+'</td>'
       +'<td class="num">'+intf(r.lpv)+'</td>'
       +'<td class="num">'+intf(r.sales)+'</td>'
+      +'<td class="num">'+((r.upSales||0)>0?'<span class="vid-pill" style="color:var(--gold2);background:var(--gold-dim)">'+intf(r.upSales)+'</span>':'—')+'</td>'
       +'<td class="num">'+(cac!=null?'<span class="cac-pill '+cacClass(cac,medCac)+'">'+money0(cac)+'</span>':'—')+'</td>'
       +'<td class="num">'+money0(r.rev)+'</td>'
+      +'<td class="num">'+money0(fatT)+'</td>'
       +'<td class="num">'+(r.spend>0?'<span class="roas-pill '+roasClass(roas)+'">'+roasf(roas)+'</span>':'—')+'</td>'
       +'<td class="num '+(lucro>=0?'pos':'neg')+'">'+money0(lucro)+'</td></tr>'; }).join('');
-  if(!rows.length) body='<tr><td colspan="11" class="empty">Sem dados no período.</td></tr>';
-  var a=aggMeta(rng), tr=dv(a.rev,a.spend), tl=a.rev-a.spend, tc=a.sales>0?dv(a.spend,a.sales):null;
-  var foot='<tfoot><tr><td>Total</td><td class="num">'+money0(a.spend)+'</td><td class="num">'+intf(a.impr)+'</td><td class="num">'+intf(a.v3)+'</td><td class="num">'+intf(a.clicks)+'</td><td class="num">'+intf(a.lpv)+'</td><td class="num">'+intf(a.sales)+'</td><td class="num">'+(tc!=null?money0(tc):'—')+'</td><td class="num">'+money0(a.rev)+'</td><td class="num">'+(a.spend>0?roasf(tr):'—')+'</td><td class="num '+(tl>=0?'pos':'neg')+'">'+money0(tl)+'</td></tr></tfoot>';
+  if(!rows.length) body='<tr><td colspan="13" class="empty">Sem dados no período.</td></tr>';
+  var a=aggMeta(rng), fatTa=a.rev+(a.upRev||0), tr=dv(a.rev,a.spend), tl=fatTa-a.spend, tc=a.sales>0?dv(a.spend,a.sales):null;
+  var foot='<tfoot><tr><td>Total</td><td class="num">'+money0(a.spend)+'</td><td class="num">'+intf(a.impr)+'</td><td class="num">'+intf(a.v3)+'</td><td class="num">'+intf(a.clicks)+'</td><td class="num">'+intf(a.lpv)+'</td><td class="num">'+intf(a.sales)+'</td><td class="num">'+((a.upSales||0)>0?intf(a.upSales):'—')+'</td><td class="num">'+(tc!=null?money0(tc):'—')+'</td><td class="num">'+money0(a.rev)+'</td><td class="num">'+money0(fatTa)+'</td><td class="num">'+(a.spend>0?roasf(tr):'—')+'</td><td class="num '+(tl>=0?'pos':'neg')+'">'+money0(tl)+'</td></tr></tfoot>';
   el('m-daily').innerHTML=head+'<tbody>'+body+'</tbody>'+foot;
 }
 
@@ -328,56 +348,55 @@ function renderInsights(rng){
 }
 
 /* =================== VENDAS =================== */
-function aggVen(rng){ var o={fbS:0,fbR:0,orgS:0,orgR:0};
-  VEN.daily.forEach(function(d){ if(!inRange(d.date,rng))return; o.fbS+=d.fbS||0;o.fbR+=d.fbR||0;o.orgS+=d.orgS||0;o.orgR+=d.orgR||0; }); return o; }
+function aggVen(rng){ var o={feS:0,feR:0,upS:0,upR:0};
+  VEN.daily.forEach(function(d){ if(!inRange(d.date,rng))return; o.feS+=d.feS||0;o.feR+=d.feR||0;o.upS+=d.upS||0;o.upR+=d.upR||0; }); return o; }
 function qcard(cls,lab,val,sub){ return '<div class="qcard'+(cls?' '+cls:'')+'"><div class="q-l">'+lab+'</div><div class="q-v">'+val+'</div>'+(sub?'<div class="q-s">'+sub+'</div>':'')+'</div>'; }
 function renderVChart(rng){
   var days=VEN.daily.filter(function(d){return isDate(d.date)&&inRange(d.date,rng);}).sort(function(a,b){return a.date.localeCompare(b.date);});
   var W=1120,H=230,pl=34,pr=16,pt=12,pb=24,pw=W-pl-pr,ph=H-pt-pb,base=pt+ph;
-  var maxV=Math.max.apply(null,days.map(function(d){return (d.fbS||0)+(d.orgS||0);}).concat([1]));
+  var maxV=Math.max.apply(null,days.map(function(d){return (d.feS||0)+(d.upS||0);}).concat([1]));
   var n=days.length||1,gw=pw/n,bw=Math.max(2,Math.min(22,gw*0.6));
   var s='<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMid meet">';
   [0,0.5,1].forEach(function(f){ var y=pt+ph*(1-f); s+='<line x1="'+pl+'" y1="'+y+'" x2="'+(W-pr)+'" y2="'+y+'" stroke="#1a1a38" stroke-dasharray="2 3"/>';
     s+='<text x="'+(pl-4)+'" y="'+(y+3)+'" text-anchor="end" fill="#645e8f" font-size="9">'+Math.round(maxV*f)+'</text>'; });
-  days.forEach(function(d,i){ var xc=pl+gw*i+gw/2, tot=(d.fbS||0)+(d.orgS||0); if(tot<=0)return;
-    var fbh=ph*dv(d.fbS,maxV), orh=ph*dv(d.orgS,maxV);
-    s+='<rect x="'+(xc-bw/2).toFixed(1)+'" y="'+(base-fbh).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+fbh.toFixed(1)+'" rx="1.5" fill="rgba(139,92,246,.78)"/>';
-    s+='<rect x="'+(xc-bw/2).toFixed(1)+'" y="'+(base-fbh-orh).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+orh.toFixed(1)+'" rx="1.5" fill="rgba(246,196,69,.72)"/>'; });
+  days.forEach(function(d,i){ var xc=pl+gw*i+gw/2, tot=(d.feS||0)+(d.upS||0); if(tot<=0)return;
+    var feh=ph*dv(d.feS,maxV), uph=ph*dv(d.upS,maxV);
+    s+='<rect x="'+(xc-bw/2).toFixed(1)+'" y="'+(base-feh).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+feh.toFixed(1)+'" rx="1.5" fill="rgba(139,92,246,.78)"/>';
+    s+='<rect x="'+(xc-bw/2).toFixed(1)+'" y="'+(base-feh-uph).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+uph.toFixed(1)+'" rx="1.5" fill="rgba(246,196,69,.85)"/>'; });
   xticks(days).forEach(function(i){ var xc=pl+gw*i+gw/2; s+='<text x="'+xc.toFixed(1)+'" y="'+(H-6)+'" text-anchor="middle" fill="#645e8f" font-size="9">'+fmtBR(days[i].date)+'</text>'; });
   s+=hitRects(days,pl,gw,pt,ph)+'</svg>';
-  el('v-chart').innerHTML='<div class="chart">'+s+'</div><div class="chart-legend"><span><span class="dot" style="background:rgba(139,92,246,.8)"></span>Tráfego pago (Meta)</span><span><span class="dot" style="background:rgba(246,196,69,.75)"></span>Outros</span></div>';
-  bindHits('v-chart',days,function(d){ var tot=(d.fbS||0)+(d.orgS||0), rev=(d.fbR||0)+(d.orgR||0); return '<div class="tt-d">'+fmtBR(d.date)+'</div><div class="tt-r"><span>Total</span><b>'+intf(tot)+' vendas</b></div><div class="tt-r"><span style="color:'+COL.vio2+'">Pago</span><b>'+intf(d.fbS)+'</b></div><div class="tt-r"><span style="color:'+COL.gold2+'">Outros</span><b>'+intf(d.orgS)+'</b></div><div class="tt-sub">Faturamento '+money0(rev)+'</div>'; });
+  el('v-chart').innerHTML='<div class="chart">'+s+'</div><div class="chart-legend"><span><span class="dot" style="background:rgba(139,92,246,.8)"></span>Front-end</span><span><span class="dot" style="background:rgba(246,196,69,.85)"></span>Upsell</span></div>';
+  bindHits('v-chart',days,function(d){ var tot=(d.feS||0)+(d.upS||0), rev=(d.feR||0)+(d.upR||0); return '<div class="tt-d">'+fmtBR(d.date)+'</div><div class="tt-r"><span>Total</span><b>'+intf(tot)+' vendas</b></div><div class="tt-r"><span style="color:'+COL.vio2+'">Front-end</span><b>'+intf(d.feS)+'</b></div><div class="tt-r"><span style="color:'+COL.gold2+'">Upsell</span><b>'+intf(d.upS)+'</b></div><div class="tt-sub">Faturamento '+money0(rev)+'</div>'; });
 }
 function renderVendas(rng){
   var a=aggVen(rng);
-  var sales=a.fbS+a.orgS, rev=a.fbR+a.orgR, ticket=dv(rev,sales);
-  var fbShare=dv(a.fbS,sales)*100;
+  var sales=a.feS+a.upS, rev=a.feR+a.upR, ticketFe=dv(a.feR,a.feS), take=dv(a.upS,a.feS)*100;
   el('v-quad').innerHTML=
-    qcard('big','Total de Vendas',intf(sales),'funil <b>VSL</b> · '+esc(PRODUTO))
-    +qcard('','Faturamento',money0(rev),'líquido · ticket médio <b>'+(sales?money(ticket):'—')+'</b>')
-    +qcard('gold','Tráfego Pago (Meta)',intf(a.fbS),pct(fbShare)+' das vendas · <b>'+money0(a.fbR)+'</b>')
-    +qcard('','Outros / direto',intf(a.orgS),pct(100-fbShare)+' das vendas · <b>'+money0(a.orgR)+'</b>');
+    qcard('big','Vendas Front-end',intf(a.feS),esc(PRODUTO)+' · ticket <b>'+(a.feS?money(ticketFe):'—')+'</b>')
+    +qcard('','Faturamento Front-end',money0(a.feR),'líquido')
+    +qcard('gold','Upsell · '+esc(UPPROD),intf(a.upS),'take-rate <b>'+pct(take)+'</b> · <b>'+money0(a.upR)+'</b>')
+    +qcard('gold','Faturamento Total',money0(rev),'front-end + upsell');
   function splitBar(title,vf,vo){ var t=vf+vo; if(t<=0)t=1; var wf=vf/t*100, wo=vo/t*100;
     return '<div style="font-size:11.5px;color:var(--muted);margin:2px 0 3px">'+title+'</div><div class="split">'
-      +(wf>0?'<span style="width:'+wf.toFixed(1)+'%;background:'+COL.vio+'" title="Pago">'+(wf>10?nf0.format(Math.round(wf))+'%':'')+'</span>':'')
-      +(wo>0?'<span style="width:'+wo.toFixed(1)+'%;background:'+COL.gold+'" title="Outros">'+(wo>10?nf0.format(Math.round(wo))+'%':'')+'</span>':'')+'</div>'; }
-  el('v-split').innerHTML=splitBar('Vendas',a.fbS,a.orgS)+splitBar('Faturamento',a.fbR,a.orgR)
-    +'<div class="split-leg"><span><span class="dot" style="background:'+COL.vio+'"></span>Tráfego pago (Meta)</span><span><span class="dot" style="background:'+COL.gold+'"></span>Outros / direto</span></div>';
-  function row(name,dot,vs,vr){ var tk=dv(vr,vs), sh=dv(vs,sales)*100;
+      +(wf>0?'<span style="width:'+wf.toFixed(1)+'%;background:'+COL.vio+'" title="Front-end">'+(wf>10?nf0.format(Math.round(wf))+'%':'')+'</span>':'')
+      +(wo>0?'<span style="width:'+wo.toFixed(1)+'%;background:'+COL.gold+'" title="Upsell">'+(wo>10?nf0.format(Math.round(wo))+'%':'')+'</span>':'')+'</div>'; }
+  el('v-split').innerHTML=splitBar('Vendas',a.feS,a.upS)+splitBar('Faturamento',a.feR,a.upR)
+    +'<div class="split-leg"><span><span class="dot" style="background:'+COL.vio+'"></span>Front-end ('+esc(PRODUTO)+')</span><span><span class="dot" style="background:'+COL.gold+'"></span>Upsell ('+esc(UPPROD)+')</span></div>';
+  function row(name,dot,vs,vr){ var tk=dv(vr,vs), sh=dv(vr,rev)*100;
     return '<tr><td><span class="srcname"><span class="sd" style="background:'+dot+'"></span>'+name+'</span></td>'
       +'<td class="num">'+intf(vs)+'</td><td class="num">'+money0(vr)+'</td><td class="num">'+(vs?money(tk):'—')+'</td><td class="num">'+pct(sh)+'</td></tr>'; }
-  var totRow='<tr><td>Total</td><td class="num">'+intf(sales)+'</td><td class="num">'+money0(rev)+'</td><td class="num">'+(sales?money(ticket):'—')+'</td><td class="num">100%</td></tr>';
-  el('v-cmp').innerHTML='<thead><tr><th>Origem</th><th>Vendas</th><th>Faturamento</th><th>Ticket</th><th>% vendas</th></tr></thead><tbody>'
-    +row('Tráfego pago (Meta)',COL.vio,a.fbS,a.fbR)+row('Outros / direto',COL.gold,a.orgS,a.orgR)+'</tbody><tfoot>'+totRow+'</tfoot>';
+  var totRow='<tr><td>Total</td><td class="num">'+intf(sales)+'</td><td class="num">'+money0(rev)+'</td><td class="num">'+(sales?money(dv(rev,sales)):'—')+'</td><td class="num">100%</td></tr>';
+  el('v-cmp').innerHTML='<thead><tr><th>Produto</th><th>Vendas</th><th>Faturamento</th><th>Ticket</th><th>% fat.</th></tr></thead><tbody>'
+    +row('Front-end · '+esc(PRODUTO),COL.vio,a.feS,a.feR)+row('Upsell · '+esc(UPPROD),COL.gold,a.upS,a.upR)+'</tbody><tfoot>'+totRow+'</tfoot>';
   renderVChart(rng);
   var rows=VEN.daily.filter(function(d){return isDate(d.date)&&inRange(d.date,rng);}).slice().sort(function(a,b){return b.date.localeCompare(a.date);});
-  var head='<thead><tr><th>Dia</th><th>Vendas</th><th>Faturamento</th><th>Pago</th><th>Fat. Pago</th><th>Outros</th><th>Fat. Outros</th></tr></thead>';
-  var body=rows.map(function(r){ var ts=(r.fbS||0)+(r.orgS||0), trv=(r.fbR||0)+(r.orgR||0);
-    return '<tr><td>'+fmtBR(r.date)+'</td><td class="num">'+intf(ts)+'</td><td class="num">'+money0(trv)+'</td>'
-      +'<td class="num">'+intf(r.fbS)+'</td><td class="num">'+money0(r.fbR)+'</td>'
-      +'<td class="num">'+intf(r.orgS)+'</td><td class="num">'+money0(r.orgR)+'</td></tr>'; }).join('');
+  var head='<thead><tr><th>Dia</th><th>Front-end</th><th>Fat. Front-end</th><th>Upsell</th><th>Fat. Upsell</th><th>Total</th><th>Fat. Total</th></tr></thead>';
+  var body=rows.map(function(r){ var ts=(r.feS||0)+(r.upS||0), trv=(r.feR||0)+(r.upR||0);
+    return '<tr><td>'+fmtBR(r.date)+'</td><td class="num">'+intf(r.feS)+'</td><td class="num">'+money0(r.feR)+'</td>'
+      +'<td class="num">'+((r.upS||0)>0?'<span style="color:var(--gold2);font-weight:700">'+intf(r.upS)+'</span>':'—')+'</td><td class="num">'+money0(r.upR)+'</td>'
+      +'<td class="num">'+intf(ts)+'</td><td class="num">'+money0(trv)+'</td></tr>'; }).join('');
   if(!rows.length)body='<tr><td colspan="7" class="empty">Sem dados no período.</td></tr>';
-  var foot='<tfoot><tr><td>Total</td><td class="num">'+intf(sales)+'</td><td class="num">'+money0(rev)+'</td><td class="num">'+intf(a.fbS)+'</td><td class="num">'+money0(a.fbR)+'</td><td class="num">'+intf(a.orgS)+'</td><td class="num">'+money0(a.orgR)+'</td></tr></tfoot>';
+  var foot='<tfoot><tr><td>Total</td><td class="num">'+intf(a.feS)+'</td><td class="num">'+money0(a.feR)+'</td><td class="num">'+intf(a.upS)+'</td><td class="num">'+money0(a.upR)+'</td><td class="num">'+intf(sales)+'</td><td class="num">'+money0(rev)+'</td></tr></tfoot>';
   el('v-daily').innerHTML=head+'<tbody>'+body+'</tbody>'+foot;
   function ranking(list,total){ var totR=0; list.forEach(function(x){totR+=x.r;}); if(totR<=0)totR=1;
     var head='<thead><tr><th>'+(total?'Anúncio':'Campanha')+'</th><th>Vendas</th><th>Faturamento</th><th>Ticket</th><th>%</th></tr></thead>';
@@ -394,7 +413,7 @@ function renderVendas(rng){
 /* =================== ORQUESTRAÇÃO =================== */
 function renderMeta(rng,prng){
   var a=aggMeta(rng), p=aggMeta(prng), days=metaDays(rng);
-  renderKpi(a,p); renderPixel(a); renderFunnel(a,p); renderChartSales(days); renderChartRoas(days);
+  renderKpi(a,p); renderUpsell(a); renderPixel(a); renderFunnel(a,p); renderChartSales(days); renderChartRoas(days);
   renderInsights(rng); renderDaily(rng); renderTree(rng);
 }
 function renderAll(){ var rng=rangeFor(period), prng=prevRange(rng);
@@ -421,11 +440,12 @@ function initTabs(){ Array.prototype.forEach.call(document.querySelectorAll('.ta
   window.addEventListener('hashchange',function(){ var k=(location.hash||'').replace('#',''); if(TABS.indexOf(k)>=0)activateTab(k); }); }
 function initCoverage(){ el('updated').textContent=D.generatedAtBR||'—'; el('taxf').textContent=(D.taxMultiplier||1.1385).toFixed(4).replace('.',',');
   var tm=META.totals||{}, vt=VEN.totals||{};
-  var totVen=(vt.fbSales||0)+(vt.orgSales||0);
+  var fatT=(tm.rev||0)+(tm.upRev||0), roasFe=dv(tm.rev,tm.spend), roasUp=dv(fatT,tm.spend);
   var win = (META.dateMin&&META.dateMax) ? (fmtBR(META.dateMin)+' → '+fmtBR(META.dateMax)) : '—';
+  var upTxt=(tm.upSales>0)?(' + <b>'+intf(tm.upSales)+'</b> upsell ('+esc(UPPROD)+') <b>'+money0(tm.upRev||0)+'</b> → faturamento total <b>'+money0(fatT)+'</b>, ROAS c/ upsell <span class="cy">'+roasf(roasUp)+'</span>'):'';
   el('coverage').innerHTML='<b>Funil VSL '+esc(PRODUTO)+'</b> · Meta Ads. Cruzamento venda × gasto na janela das queries ('+win+'): '
-    +'<b>'+intf(tm.sales||0)+'</b> venda(s) · faturamento <b>'+money0(tm.rev||0)+'</b> · ROAS c/ imposto <span class="cy">'+roasf(dv(tm.rev,tm.spend))+'</span>. '
-    +'Funil <b>novo</b> — cresce sozinho a cada 3h conforme entram gasto e vendas. Total de vendas do funil: '+intf(totVen)+'.'; }
+    +'<b>'+intf(tm.sales||0)+'</b> venda(s) front-end · faturamento <b>'+money0(tm.rev||0)+'</b> · ROAS c/ imposto <span class="cy">'+roasf(roasFe)+'</span>'+upTxt+'. '
+    +'Funil <b>novo</b> — cresce sozinho a cada 3h conforme entram gasto e vendas.'; }
 
 if(!META.daily.length && !VEN.daily.length){ el('coverage').innerHTML='<b>Sem dados.</b> Rode o build.ps1 para gerar o data.js.'; }
 else { initCoverage(); initPeriods(); initTabs(); renderAll(); }

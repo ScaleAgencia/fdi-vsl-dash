@@ -23,6 +23,9 @@ $META_ID   = '1BkrUzkcjX-xJ5C5qapPseBLRtev7FwpLovfaDKFNsZE'; $META_GID   = '0'  
 $VENDAS_ID = '1BJ-T_Aj5oeMge667xWtX_SfGCSiibcFo7l0yLWTt_BQ'; $VENDAS_GID = '0'   # aba vendas (multi-produto)
 $TAX = 1.1385                 # imposto Meta (+13,85%) aplicado em TODO gasto
 $CAMP_FRAG = 'fdi-vsl'        # funil VSL = utm_campaign contem "fdi-vsl"
+$UPSELL_FRAG = 'prosperus'    # produto de UPSELL do funil (Prosperus e variantes). Mesma utm do VSL, separado do front-end.
+$FE_LABEL = 'Formula dos Investimentos'   # front-end (rotulo)
+$UP_LABEL = 'Prosperus'                   # upsell (rotulo)
 $SENT = 'SEM_RASTREIO'
 $US = [char]31   # separador de chave (Unit Separator). NAO usar backtick-u em string: quebra o parser no pwsh7 (vira escape Unicode)
 
@@ -108,10 +111,10 @@ $V_SRC=HdrLike $vh '*utm*source*'; $V_MED=HdrLike $vh '*utm*medium*'
 $V_CONT=HdrLike $vh '*utm*content*'; $V_TERM=HdrLike $vh '*utm*term*'; $V_CAMP=HdrLike $vh '*utm*campaign*'
 foreach($pair in @(@('Data',$V_DATE),@('Faturamento',$V_FAT),@('utm_campaign',$V_CAMP))){ if($pair[1] -lt 0){ throw ("Vendas: coluna nao encontrada: "+$pair[0]) } }
 
-$vslSales = New-Object System.Collections.Generic.List[object]   # todas as vendas do funil VSL
-$allDaily=@{}                                                    # por dia x origem (aba Vendas)
-$prodCount=@{}
-function _ad($d){ if(-not $allDaily.ContainsKey($d)){ $allDaily[$d]=[pscustomobject]@{date=$d;fbSales=0;fbRev=0.0;orgSales=0;orgRev=0.0} }; return $allDaily[$d] }
+$vslSales = New-Object System.Collections.Generic.List[object]   # vendas do funil VSL (front-end E upsell, com flag .up)
+$allDaily=@{}                                                    # por dia: front-end x upsell (aba Vendas)
+$prodCount=@{}; $upProdCount=@{}
+function _ad($d){ if(-not $allDaily.ContainsKey($d)){ $allDaily[$d]=[pscustomobject]@{date=$d;feSales=0;feRev=0.0;upSales=0;upRev=0.0} }; return $allDaily[$d] }
 
 foreach($r in $vd){
   if($r.Count -le $V_FAT){ continue }
@@ -119,16 +122,18 @@ foreach($r in $vd){
   if((Deaccent $camp) -notlike ("*"+$CAMP_FRAG+"*")){ continue }   # so o funil VSL
   $d = SaleDate $r[$V_DATE]; if($d -eq ''){ continue }
   $rev = MoneyBR $r[$V_FAT]
-  $prod = Norm $r[$V_PROD]; if($prod -ne ''){ if(-not $prodCount.ContainsKey($prod)){$prodCount[$prod]=0}; $prodCount[$prod]++ }
-  $src = Deaccent (Cell $r $V_SRC)
-  $isFb = ($src -eq 'facebook-ads' -or $src -eq '' -or $src -like 'fb*' -or $src -like 'facebook*')
+  $prod = Norm $r[$V_PROD]
+  $isUp = ((Deaccent $prod) -like ("*"+$UPSELL_FRAG+"*"))         # upsell = produto Prosperus (mesma utm do VSL)
+  if($prod -ne ''){ if($isUp){ if(-not $upProdCount.ContainsKey($prod)){$upProdCount[$prod]=0}; $upProdCount[$prod]++ }
+                    else { if(-not $prodCount.ContainsKey($prod)){$prodCount[$prod]=0}; $prodCount[$prod]++ } }
   $o=_ad $d
-  if($isFb){ $o.fbSales++; $o.fbRev+=$rev } else { $o.orgSales++; $o.orgRev+=$rev }
-  $vslSales.Add([pscustomobject]@{ date=$d; rev=$rev
-    camp=$camp; adset=(Cell $r $V_TERM); ad=(Cell $r $V_CONT) })
+  if($isUp){ $o.upSales++; $o.upRev+=$rev } else { $o.feSales++; $o.feRev+=$rev }
+  $vslSales.Add([pscustomobject]@{ date=$d; rev=$rev; up=$isUp
+    camp=$camp; adset=(Cell $r $V_TERM); ad=(Cell $r $V_CONT); prod=$prod })
 }
 $allDailyArr=@($allDaily.Values | Sort-Object date)
-Write-Host ("Vendas VSL: total={0}" -f $vslSales.Count)
+$feN=0; $upN=0; foreach($s in $vslSales){ if($s.up){$upN++}else{$feN++} }
+Write-Host ("Vendas VSL: front-end={0}  upsell={1}  total={2}" -f $feN,$upN,$vslSales.Count)
 
 # =====================================================================
 #  2) QUERIES META: daily + grain (gasto c/ imposto + funil de video)
@@ -159,7 +164,7 @@ foreach($r in $md){ if($r.Count -le $Q_AD){continue}
 }
 
 $daily=@{}; $grain=@{}
-function _gd($d){ if(-not $daily.ContainsKey($d)){ $daily[$d]=[pscustomobject]@{date=$d;spendRaw=0.0;spend=0.0;impr=0;reach=0;clicks=0;lpv=0;v3=0;v75=0;checkout=0;mpur=0;mrev=0.0;sales=0;rev=0.0} }; return $daily[$d] }
+function _gd($d){ if(-not $daily.ContainsKey($d)){ $daily[$d]=[pscustomobject]@{date=$d;spendRaw=0.0;spend=0.0;impr=0;reach=0;clicks=0;lpv=0;v3=0;v75=0;checkout=0;mpur=0;mrev=0.0;sales=0;rev=0.0;upSales=0;upRev=0.0} }; return $daily[$d] }
 function _gg($k,$d,$c,$s,$a){ if(-not $grain.ContainsKey($k)){ $grain[$k]=[pscustomobject]@{date=$d;campaign=$c;adset=$s;ad=$a;spendRaw=0.0;spend=0.0;impr=0;reach=0;clicks=0;lpv=0;v3=0;v75=0;checkout=0;mpur=0;mrev=0.0;sales=0;rev=0.0} }; return $grain[$k] }
 
 foreach($r in $md){ if($r.Count -le $Q_AD){continue}
@@ -187,9 +192,14 @@ $qMax= if($qDays.Count){ $qDays[-1] } else { '' }
 #  3) CRUZAMENTO: vendas VSL dentro da janela das queries -> funil + grain
 # =====================================================================
 function MatchName($val,$deMap){ $vd=Deaccent $val; if($vd -eq ''){return ''}; if($deMap.ContainsKey($vd)){return $deMap[$vd]}; return '' }
-$attr=0; $inWin=0
+$attr=0; $inWin=0; $upWin=0; $upRevWin=0.0
 foreach($s in $vslSales){
   if($qMin -eq '' -or $s.date -lt $qMin -or $s.date -gt $qMax){ continue }   # cruza SO a janela das queries
+  if($s.up){                                                                # UPSELL: nao entra no funil front-end; incremental
+    $upWin++; $upRevWin+=$s.rev
+    $ou=_gd $s.date; $ou.upSales++; $ou.upRev+=$s.rev
+    continue
+  }
   $inWin++
   $o=_gd $s.date; $o.sales++; $o.rev+=$s.rev
   $cName=MatchName $s.camp $campDe
@@ -214,7 +224,8 @@ function _sum($arr,$p){ $x=($arr|Measure-Object $p -Sum).Sum; if($null -eq $x){r
 $tot=[pscustomobject]@{
   spendRaw=(_sum $dailyArr 'spendRaw'); spend=(_sum $dailyArr 'spend'); impr=(_sum $dailyArr 'impr'); reach=(_sum $dailyArr 'reach'); clicks=(_sum $dailyArr 'clicks')
   lpv=(_sum $dailyArr 'lpv'); v3=(_sum $dailyArr 'v3'); v75=(_sum $dailyArr 'v75'); checkout=(_sum $dailyArr 'checkout')
-  mpur=(_sum $dailyArr 'mpur'); mrev=(_sum $dailyArr 'mrev'); sales=(_sum $dailyArr 'sales'); rev=(_sum $dailyArr 'rev'); salesAttr=$attr }
+  mpur=(_sum $dailyArr 'mpur'); mrev=(_sum $dailyArr 'mrev'); sales=(_sum $dailyArr 'sales'); rev=(_sum $dailyArr 'rev'); salesAttr=$attr
+  upSales=(_sum $dailyArr 'upSales'); upRev=(_sum $dailyArr 'upRev') }
 
 # intern de nomes p/ enxugar o grain
 $names=New-Object System.Collections.Generic.List[string]; $nameIdx=@{}
@@ -228,7 +239,7 @@ foreach($g in $grainArr){
 $dOut=@()
 foreach($o in $dailyArr){
   $dOut += [pscustomobject]@{ date=$o.date; spend=[math]::Round($o.spend,2); spendRaw=[math]::Round($o.spendRaw,2); impr=[int]$o.impr; reach=[int]$o.reach; clicks=[int]$o.clicks; lpv=[int]$o.lpv
-    v3=[int]$o.v3; v75=[int]$o.v75; checkout=[int]$o.checkout; mpur=[int]$o.mpur; mrev=[math]::Round($o.mrev,2); sales=[int]$o.sales; rev=[math]::Round($o.rev,2) }
+    v3=[int]$o.v3; v75=[int]$o.v75; checkout=[int]$o.checkout; mpur=[int]$o.mpur; mrev=[math]::Round($o.mrev,2); sales=[int]$o.sales; rev=[math]::Round($o.rev,2); upSales=[int]$o.upSales; upRev=[math]::Round($o.upRev,2) }
 }
 
 # =====================================================================
@@ -236,11 +247,12 @@ foreach($o in $dailyArr){
 # =====================================================================
 $salesDaily=@()
 foreach($o in $allDailyArr){
-  $salesDaily += [pscustomobject]@{ date=$o.date; fbS=[int]$o.fbSales; fbR=[math]::Round($o.fbRev,2); orgS=[int]$o.orgSales; orgR=[math]::Round($o.orgRev,2) }
+  $salesDaily += [pscustomobject]@{ date=$o.date; feS=[int]$o.feSales; feR=[math]::Round($o.feRev,2); upS=[int]$o.upSales; upR=[math]::Round($o.upRev,2) }
 }
-# ranking por campanha e por anuncio (atribuido por utm) - todas as vendas VSL
+# ranking por campanha e por anuncio (atribuido por utm) - SO front-end (upsell fica na secao propria)
 $byCampAgg=@{}; $byAdAgg=@{}
 foreach($s in $vslSales){
+  if($s.up){ continue }
   $ck= if($s.camp -ne ''){ $s.camp } else { $SENT }
   if(-not $byCampAgg.ContainsKey($ck)){ $byCampAgg[$ck]=[pscustomobject]@{name=$ck;sales=0;rev=0.0} }
   $byCampAgg[$ck].sales++; $byCampAgg[$ck].rev+=$s.rev
@@ -251,19 +263,20 @@ foreach($s in $vslSales){
 $byCamp=@(); foreach($x in ($byCampAgg.Values | Sort-Object -Property @{e='sales';Descending=$true})){ $byCamp += [pscustomobject]@{ n=$x.name; s=[int]$x.sales; r=[math]::Round($x.rev,2) } }
 $byAd=@();   foreach($x in ($byAdAgg.Values   | Sort-Object -Property @{e='sales';Descending=$true})){ $byAd   += [pscustomobject]@{ n=$x.name; s=[int]$x.sales; r=[math]::Round($x.rev,2) } }
 
-$vTotFbS=($allDailyArr|Measure-Object fbSales -Sum).Sum;  if($null -eq $vTotFbS){$vTotFbS=0}
-$vTotFbR=($allDailyArr|Measure-Object fbRev -Sum).Sum;    if($null -eq $vTotFbR){$vTotFbR=0}
-$vTotOrgS=($allDailyArr|Measure-Object orgSales -Sum).Sum; if($null -eq $vTotOrgS){$vTotOrgS=0}
-$vTotOrgR=($allDailyArr|Measure-Object orgRev -Sum).Sum;   if($null -eq $vTotOrgR){$vTotOrgR=0}
+$vTotFeS=($allDailyArr|Measure-Object feSales -Sum).Sum;  if($null -eq $vTotFeS){$vTotFeS=0}
+$vTotFeR=($allDailyArr|Measure-Object feRev -Sum).Sum;    if($null -eq $vTotFeR){$vTotFeR=0}
+$vTotUpS=($allDailyArr|Measure-Object upSales -Sum).Sum;  if($null -eq $vTotUpS){$vTotUpS=0}
+$vTotUpR=($allDailyArr|Measure-Object upRev -Sum).Sum;    if($null -eq $vTotUpR){$vTotUpR=0}
 $sMin= if($allDailyArr.Count){ $allDailyArr[0].date } else { '' }
 $sMax= if($allDailyArr.Count){ $allDailyArr[-1].date } else { '' }
-# produto dominante do funil
-$prodTop=''; $prodMax=-1; foreach($k in $prodCount.Keys){ if($prodCount[$k] -gt $prodMax){ $prodMax=$prodCount[$k]; $prodTop=$k } }
+# produto dominante do front-end e do upsell
+$prodTop=$FE_LABEL; $prodMax=-1; foreach($k in $prodCount.Keys){ if($prodCount[$k] -gt $prodMax){ $prodMax=$prodCount[$k]; $prodTop=$k } }
+$upProdTop=$UP_LABEL; $upMax=-1; foreach($k in $upProdCount.Keys){ if($upProdCount[$k] -gt $upMax){ $upMax=$upProdCount[$k]; $upProdTop=$k } }
 
 $vendas=[pscustomobject]@{
   daily=@($salesDaily); byCamp=@($byCamp); byAd=@($byAd)
-  dateMin=$sMin; dateMax=$sMax; product=$prodTop
-  totals=[pscustomobject]@{ fbSales=[int]$vTotFbS; fbRev=[math]::Round($vTotFbR,2); orgSales=[int]$vTotOrgS; orgRev=[math]::Round($vTotOrgR,2) }
+  dateMin=$sMin; dateMax=$sMax; product=$prodTop; upsellProduct=$upProdTop
+  totals=[pscustomobject]@{ feSales=[int]$vTotFeS; feRev=[math]::Round($vTotFeR,2); upSales=[int]$vTotUpS; upRev=[math]::Round($vTotUpR,2) }
 }
 
 $meta=[pscustomobject]@{
@@ -289,5 +302,8 @@ Write-Host ("OK  META (janela {0} -> {1})  dias={2} grain={3} vendas-janela={4} 
   $qMin,$qMax,$meta.daily.Count,$meta.grain.Count,$tot.sales,$tot.salesAttr,($tot.spend.ToString('N2',$BR)),($tot.rev.ToString('N2',$BR)),(([double](& { if($tot.spend -gt 0){$tot.rev/$tot.spend}else{0} })).ToString('N2',$BR)))
 Write-Host ("OK  META funil: impr={0} 3s={1} 75%={2} cliques={3} lpv={4} chk={5} | pixel: compras={6} valor=R$ {7}" -f `
   $tot.impr,$tot.v3,$tot.v75,$tot.clicks,$tot.lpv,$tot.checkout,$tot.mpur,([double]$tot.mrev).ToString('N2',$BR))
-Write-Host ("OK  VENDAS VSL ({0} -> {1})  FB={2} / R$ {3}   outros={4} / R$ {5}   produto={6}" -f `
-  $sMin,$sMax,$vTotFbS,([double]$vTotFbR).ToString('N2',$BR),$vTotOrgS,([double]$vTotOrgR).ToString('N2',$BR),$prodTop)
+$fatTot=$tot.rev+$tot.upSales*0+$tot.upRev
+Write-Host ("OK  UPSELL (janela): {0} upsell(s) / R$ {1}  | fat total (FE+upsell)=R$ {2}  ROAS c/upsell={3}  produto={4}" -f `
+  $tot.upSales,([double]$tot.upRev).ToString('N2',$BR),([double]$fatTot).ToString('N2',$BR),(([double](& { if($tot.spend -gt 0){$fatTot/$tot.spend}else{0} })).ToString('N2',$BR)),$upProdTop)
+Write-Host ("OK  VENDAS VSL ({0} -> {1})  front-end={2} / R$ {3}   upsell={4} / R$ {5}   produto={6}" -f `
+  $sMin,$sMax,$vTotFeS,([double]$vTotFeR).ToString('N2',$BR),$vTotUpS,([double]$vTotUpR).ToString('N2',$BR),$prodTop)
