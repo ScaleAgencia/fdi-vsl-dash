@@ -88,13 +88,23 @@ function renderKpi(a,p){
   cards+=kpiCard('hl','Vendas',intf(a.sales),
     subRow('CPA / CAC', a.sales?money(cac):'—', trendHTML(cac,dv(p.spend,p.sales),false))
     + subRow('Checkout → venda', a.checkout?pct(taxaCompra*100):'—', trendHTML(taxaCompra,dv(p.sales,p.checkout),true)));
-  var rc=roasClass(roasUp), barw=clamp(roasUp/2)*100, barcol=roasUp>=1?COL.gold:(roasUp>=0.8?COL.gold:'#ff5c7a');
-  var upRow=(a.upRev>0)?subRow('c/ upsell ('+esc(UPPROD)+')', '<span style="color:var(--gold2)">R$ '+roasf(roasUp)+'</span>', ''):'';
-  cards+=kpiCard('gold','ROAS c/ imposto',roasf(roas),
-    subRow('Retorno por R$ 1 (front-end)', 'R$ '+roasf(roas), trendHTML(roas,dv(p.rev,p.spend),true))
-    + upRow
-    + '<div class="sub-row"><span class="s-l">break-even (1,00)</span><span class="s-v">'+(roasUp>=1?'✓ no lucro':pct(roasUp*100)+' do equilíbrio')+'</span></div>'
-    + '<div class="mini-bar"><span style="width:'+barw.toFixed(0)+'%;background:'+barcol+'"></span></div>');
+  // ---- ROAS: front-end + FINAL (c/ upsell) lado a lado, o final DESTACADO ----
+  var barw=clamp(roasUp/2)*100, barcol=roasUp>=1?COL.gold:(roasUp>=0.8?COL.gold:'#ff5c7a');
+  var beTxt=(roasUp>=1?'✓ no lucro':pct(roasUp*100)+' do equilíbrio');
+  if(a.upRev>0){
+    cards+='<div class="kpi-card gold roas-duo">'
+      +'<div class="rd fe"><div class="rd-lab">ROAS front-end</div><div class="rd-val">'+roasf(roas)+'</div>'
+        +'<div class="rd-sub">só '+esc(PRODUTO)+' '+trendHTML(roas,dv(p.rev,p.spend),true)+'</div></div>'
+      +'<div class="rd final"><div class="rd-lab">★ ROAS final · c/ upsell</div><div class="rd-val">'+roasf(roasUp)+'</div>'
+        +'<div class="rd-sub">'+beTxt+' · fat. total '+money0(fatTot)+'</div>'
+        +'<div class="mini-bar"><span style="width:'+barw.toFixed(0)+'%;background:'+barcol+'"></span></div></div>'
+      +'</div>';
+  } else {
+    cards+=kpiCard('gold','ROAS c/ imposto',roasf(roas),
+      subRow('Retorno por R$ 1', 'R$ '+roasf(roas), trendHTML(roas,dv(p.rev,p.spend),true))
+      +'<div class="sub-row"><span class="s-l">break-even (1,00)</span><span class="s-v">'+beTxt+'</span></div>'
+      +'<div class="mini-bar"><span style="width:'+barw.toFixed(0)+'%;background:'+barcol+'"></span></div>');
+  }
   el('m-kpi').innerHTML=hero+cards;
 }
 

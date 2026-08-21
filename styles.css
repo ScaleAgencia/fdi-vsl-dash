@@ -84,6 +84,18 @@ b{font-weight:700}
 .kpi-main .m-val{font-size:23px;font-weight:800;letter-spacing:-.5px;margin-top:5px}
 .kpi-card.hl .m-val{color:var(--vio2)} .kpi-card.gold .m-val{color:var(--gold2)} .kpi-card.cyan .m-val{color:var(--cy2)}
 .kpi-sub{flex:1;padding:11px 14px;display:flex;flex-direction:column;justify-content:center;gap:7px;border-left:1px solid var(--line);background:var(--bg2)}
+/* ROAS duo: front-end + final (c/ upsell) lado a lado, final destacado */
+.kpi-card.roas-duo{padding:0}
+.roas-duo .rd{flex:1;padding:13px 15px;display:flex;flex-direction:column;justify-content:center;gap:3px;min-width:0}
+.roas-duo .rd.fe{background:linear-gradient(180deg,var(--panel2),var(--panel));border-left:3px solid var(--line)}
+.roas-duo .rd.final{background:linear-gradient(135deg,var(--gold-dim),transparent),var(--panel2);border-left:1px solid var(--line);box-shadow:inset 3px 0 0 var(--gold)}
+.roas-duo .rd-lab{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.2px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.roas-duo .rd.final .rd-lab{color:var(--gold2)}
+.roas-duo .rd-val{font-size:24px;font-weight:800;letter-spacing:-.5px;color:var(--ink)}
+.roas-duo .rd.final .rd-val{font-size:31px;color:var(--gold2);text-shadow:0 2px 14px rgba(246,196,69,.25)}
+.roas-duo .rd-sub{font-size:10.5px;color:var(--muted2);line-height:1.35}
+.roas-duo .rd.final .rd-sub{color:var(--gold)}
+.roas-duo .mini-bar{margin-top:5px}
 .sub-row{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12px}
 .sub-row .s-l{color:var(--muted);font-size:11px}
 .sub-row .s-v{font-weight:700;color:var(--ink2)}
