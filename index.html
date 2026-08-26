@@ -42,6 +42,7 @@
 
   <nav class="tabs" id="tabs">
     <button class="tab active" data-tab="meta"><span class="tdot" style="background:#8b5cf6"></span>Meta Ads · Funil VSL</button>
+    <button class="tab" data-tab="google"><span class="tdot" style="background:#34d7e6"></span>Google · Funil</button>
     <button class="tab" data-tab="vendas"><span class="tdot" style="background:#f6c445"></span>Vendas</button>
   </nav>
 
@@ -87,6 +88,30 @@
         <span class="hint">métricas de funil por criativo (CPM · CTR · CPC · Hook · Hold · CPA · ROAS) · clique numa <b>campanha</b> p/ abrir os conjuntos e num <b>conjunto</b> p/ ver os anúncios · ordene por qualquer coluna</span></div>
       <div class="tree-legend" id="m-treeLegend"></div>
       <div class="table-scroll"><table class="tbl tree" id="m-tree"></table></div>
+    </div>
+  </section>
+
+  <!-- ============ GOOGLE (funil curto) ============ -->
+  <section class="panel-tab hidden" id="tab-google">
+    <div class="coverage" id="g-cov" style="background:var(--cy-dim);border-color:rgba(52,215,230,.28)"></div>
+    <div class="funil-grid">
+      <div class="kpi-col" id="g-kpi"></div>
+      <div class="card" style="margin-bottom:0">
+        <div class="card-h">Funil Google / YouTube <span class="hint">sem imposto · Impressões › Cliques › Vendas · seta = vs. período anterior</span></div>
+        <div id="g-funnel"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h">Visão diária <span class="hint">investimento do Google por dia (sem imposto)</span></div>
+      <div class="table-scroll"><table class="tbl" id="g-daily"></table></div>
+    </div>
+
+    <div class="card">
+      <div class="card-h">Otimização — Campanha › Grupo › Anúncio
+        <span class="hint">gasto e tráfego por criativo · clique numa <b>campanha</b> p/ abrir os grupos e num <b>grupo</b> p/ ver os anúncios · ordene por qualquer coluna</span></div>
+      <div class="tree-legend" id="g-treeLegend"></div>
+      <div class="table-scroll"><table class="tbl tree" id="g-tree"></table></div>
     </div>
   </section>
 

@@ -19,8 +19,9 @@ $dataDir = Join-Path $root 'data'
 New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
 
 # ---- Fontes (somente leitura) --------------------------------------
-$META_ID   = '1BkrUzkcjX-xJ5C5qapPseBLRtev7FwpLovfaDKFNsZE'; $META_GID   = '0'   # Queries | Meta Ads FDI
-$VENDAS_ID = '1BJ-T_Aj5oeMge667xWtX_SfGCSiibcFo7l0yLWTt_BQ'; $VENDAS_GID = '0'   # aba vendas (multi-produto)
+$META_ID   = '1BkrUzkcjX-xJ5C5qapPseBLRtev7FwpLovfaDKFNsZE'; $META_GID   = '0'            # Queries | Meta Ads FDI
+$GOOG_GID  = '1609119011'                                                                # Queries google fdi (mesma planilha)
+$VENDAS_ID = '1BJ-T_Aj5oeMge667xWtX_SfGCSiibcFo7l0yLWTt_BQ'; $VENDAS_GID = '0'            # aba vendas (multi-produto)
 $TAX = 1.1385                 # imposto Meta (+13,85%) aplicado em TODO gasto
 $CAMP_FRAG = 'fdi-vsl'        # funil VSL = utm_campaign contem "fdi-vsl"
 $UPSELL_FRAG = 'prosperus'    # produto de UPSELL do funil (Prosperus e variantes). Mesma utm do VSL, separado do front-end.
@@ -101,9 +102,10 @@ function Cell($r,$i){ if($i -ge 0 -and $r.Count -gt $i){ return CleanUtm $r[$i] 
 #  1) VENDAS: filtra o funil VSL (utm_campaign contem FDI-VSL)
 # =====================================================================
 Write-Host "Baixando planilhas..."
-$vCsv=Join-Path $dataDir 'vendas.csv'; $mCsv=Join-Path $dataDir 'meta.csv'
+$vCsv=Join-Path $dataDir 'vendas.csv'; $mCsv=Join-Path $dataDir 'meta.csv'; $gCsv=Join-Path $dataDir 'google.csv'
 Get-Sheet $VENDAS_ID $VENDAS_GID $vCsv
 Get-Sheet $META_ID   $META_GID   $mCsv
+Get-Sheet $META_ID   $GOOG_GID   $gCsv
 
 $v = Read-Csv $vCsv; $vh=$v[0]; $vd=$v[1..($v.Count-1)]
 $V_DATE=HdrLike $vh 'data'; $V_PROD=HdrLike $vh 'produto'; $V_FAT=HdrLike $vh 'faturamento'
@@ -111,7 +113,8 @@ $V_SRC=HdrLike $vh '*utm*source*'; $V_MED=HdrLike $vh '*utm*medium*'
 $V_CONT=HdrLike $vh '*utm*content*'; $V_TERM=HdrLike $vh '*utm*term*'; $V_CAMP=HdrLike $vh '*utm*campaign*'
 foreach($pair in @(@('Data',$V_DATE),@('Faturamento',$V_FAT),@('utm_campaign',$V_CAMP))){ if($pair[1] -lt 0){ throw ("Vendas: coluna nao encontrada: "+$pair[0]) } }
 
-$vslSales = New-Object System.Collections.Generic.List[object]   # vendas do funil VSL (front-end E upsell, com flag .up)
+$vslSales = New-Object System.Collections.Generic.List[object]   # vendas do funil VSL Meta (front-end E upsell, com flag .up)
+$gRawSales = New-Object System.Collections.Generic.List[object]  # vendas google-ads de produto FDI (cruza com queries Google depois)
 $allDaily=@{}                                                    # por dia: front-end x upsell (aba Vendas)
 $prodCount=@{}; $upProdCount=@{}
 function _ad($d){ if(-not $allDaily.ContainsKey($d)){ $allDaily[$d]=[pscustomobject]@{date=$d;feSales=0;feRev=0.0;upSales=0;upRev=0.0} }; return $allDaily[$d] }
@@ -119,11 +122,19 @@ function _ad($d){ if(-not $allDaily.ContainsKey($d)){ $allDaily[$d]=[pscustomobj
 foreach($r in $vd){
   if($r.Count -le $V_FAT){ continue }
   $camp = Cell $r $V_CAMP
-  if((Deaccent $camp) -notlike ("*"+$CAMP_FRAG+"*")){ continue }   # so o funil VSL
   $d = SaleDate $r[$V_DATE]; if($d -eq ''){ continue }
   $rev = MoneyBR $r[$V_FAT]
-  $prod = Norm $r[$V_PROD]
-  $isUp = ((Deaccent $prod) -like ("*"+$UPSELL_FRAG+"*"))         # upsell = produto Prosperus (mesma utm do VSL)
+  $prod = Norm $r[$V_PROD]; $prodD = Deaccent $prod
+  $srcD = Deaccent (Cell $r $V_SRC)
+  $isUp = ($prodD -like ("*"+$UPSELL_FRAG+"*"))                   # upsell = produto Prosperus
+  $isFdiFam = ($prodD -like '*formula dos investimentos*' -or $isUp)
+  # Google: venda google-ads de produto FDI -> cruza depois com as campanhas das queries Google
+  if($srcD -eq 'google-ads' -and $isFdiFam){
+    $gRawSales.Add([pscustomobject]@{ date=$d; rev=$rev; up=$isUp
+      camp=$camp; adset=(Cell $r $V_TERM); ad=(Cell $r $V_CONT); prod=$prod })
+  }
+  # Meta VSL: utm_campaign contem fdi-vsl
+  if((Deaccent $camp) -notlike ("*"+$CAMP_FRAG+"*")){ continue }
   if($prod -ne ''){ if($isUp){ if(-not $upProdCount.ContainsKey($prod)){$upProdCount[$prod]=0}; $upProdCount[$prod]++ }
                     else { if(-not $prodCount.ContainsKey($prod)){$prodCount[$prod]=0}; $prodCount[$prod]++ } }
   $o=_ad $d
@@ -133,7 +144,7 @@ foreach($r in $vd){
 }
 $allDailyArr=@($allDaily.Values | Sort-Object date)
 $feN=0; $upN=0; foreach($s in $vslSales){ if($s.up){$upN++}else{$feN++} }
-Write-Host ("Vendas VSL: front-end={0}  upsell={1}  total={2}" -f $feN,$upN,$vslSales.Count)
+Write-Host ("Vendas VSL: front-end={0}  upsell={1}  total={2}  | google-ads FDI (bruto)={3}" -f $feN,$upN,$vslSales.Count,$gRawSales.Count)
 
 # =====================================================================
 #  2) QUERIES META: daily + grain (gasto c/ imposto + funil de video)
@@ -243,6 +254,84 @@ foreach($o in $dailyArr){
 }
 
 # =====================================================================
+#  3b) GOOGLE ADS: daily + grain (SEM imposto, funil curto) + cruzamento
+# =====================================================================
+$gmv = Read-Csv $gCsv; $gh=$gmv[0]; $gdta= if($gmv.Count -gt 1){ $gmv[1..($gmv.Count-1)] } else { @() }
+$GG_DAY=HdrLike $gh 'day'; if($GG_DAY -lt 0){ $GG_DAY=HdrLike $gh 'date' }
+$GG_CAMP=HdrLike $gh 'campaign name'; if($GG_CAMP -lt 0){ $GG_CAMP=HdrLike $gh '*campaign*' }
+$GG_GRP=HdrLike $gh '*ad group*'; if($GG_GRP -lt 0){ $GG_GRP=HdrLike $gh '*group*' }
+$GG_AD=HdrLike $gh 'ad name'; if($GG_AD -lt 0){ $GG_AD=HdrLike $gh '*ad name*' }
+$GG_COST=HdrLike $gh '*cost*'; if($GG_COST -lt 0){ $GG_COST=HdrLike $gh '*spend*' }
+$GG_CLK=HdrLike $gh 'clicks'; $GG_IMP=HdrLike $gh 'impressions'
+
+$gCampDe=@{}; $gSetDe=@{}; $gAdDe=@{}; $gPair=@{}; $gTriple=@{}; $gDaysSet=@{}
+if($GG_CAMP -ge 0 -and $GG_AD -ge 0){
+ foreach($r in $gdta){ if($r.Count -le $GG_AD){continue}
+  $cn=Norm $r[$GG_CAMP]; $sn= if($GG_GRP -ge 0){Norm $r[$GG_GRP]}else{''}; $an=Norm $r[$GG_AD]
+  if($cn -ne ''){ $k=Deaccent $cn; if(-not $gCampDe.ContainsKey($k)){$gCampDe[$k]=$cn} }
+  if($sn -ne ''){ $k=Deaccent $sn; if(-not $gSetDe.ContainsKey($k)){$gSetDe[$k]=$sn} }
+  if($an -ne ''){ $k=Deaccent $an; if(-not $gAdDe.ContainsKey($k)){$gAdDe[$k]=$an} }
+  if($cn -ne '' -and $sn -ne ''){ $gPair[($cn+$US+$sn)]=$true; if($an -ne ''){ $gTriple[($cn+$US+$sn+$US+$an)]=$true } }
+ }
+}
+
+$gdaily=@{}; $ggrain=@{}
+function _ggd($d){ if(-not $gdaily.ContainsKey($d)){ $gdaily[$d]=[pscustomobject]@{date=$d;spend=0.0;impr=0;clicks=0;sales=0;rev=0.0} }; return $gdaily[$d] }
+function _ggg($k,$d,$c,$s,$a){ if(-not $ggrain.ContainsKey($k)){ $ggrain[$k]=[pscustomobject]@{date=$d;campaign=$c;adset=$s;ad=$a;spend=0.0;impr=0;clicks=0;sales=0;rev=0.0} }; return $ggrain[$k] }
+
+if($GG_DAY -ge 0 -and $GG_AD -ge 0){
+ foreach($r in $gdta){ if($r.Count -le $GG_AD){continue}
+  $d=QDay $r[$GG_DAY]; if($d -notmatch '^\d{4}-\d{2}-\d{2}$'){continue}
+  $gDaysSet[$d]=$true
+  $sp= if($GG_COST -ge 0){ MoneyBR $r[$GG_COST] } else { 0.0 }   # SEM imposto no Google (spend cru)
+  $im= if($GG_IMP -ge 0){ ToInt $r[$GG_IMP] } else { 0 }
+  $ck= if($GG_CLK -ge 0){ ToInt $r[$GG_CLK] } else { 0 }
+  $cn=Norm $r[$GG_CAMP]; $sn= if($GG_GRP -ge 0){Norm $r[$GG_GRP]}else{''}; $an=Norm $r[$GG_AD]
+  $o=_ggd $d; $o.spend+=$sp;$o.impr+=$im;$o.clicks+=$ck
+  $g=_ggg ($d+$US+$cn+$US+$sn+$US+$an) $d $cn $sn $an; $g.spend+=$sp;$g.impr+=$im;$g.clicks+=$ck
+ }
+}
+$gqDays=@($gDaysSet.Keys | Sort-Object)
+$gQMin= if($gqDays.Count){ $gqDays[0] } else { '' }
+$gQMax= if($gqDays.Count){ $gqDays[-1] } else { '' }
+
+# cruza vendas google-ads FDI que casam com as campanhas destas queries Google, na janela
+$gAttr=0; $gInWin=0
+foreach($s in $gRawSales){
+  if($gQMin -eq '' -or $s.date -lt $gQMin -or $s.date -gt $gQMax){ continue }
+  $cName=MatchName $s.camp $gCampDe
+  if($cName -eq ''){ continue }   # escopo VSL Google = so campanhas destas queries
+  $gInWin++
+  $o=_ggd $s.date; $o.sales++; $o.rev+=$s.rev
+  $sName=MatchName $s.adset $gSetDe
+  $aName=MatchName $s.ad $gAdDe
+  if($sName -eq '' -or -not $gPair.ContainsKey(($cName+$US+$sName))){ $sName=$SENT; $aName=$SENT }
+  elseif($aName -eq '' -or -not $gTriple.ContainsKey(($cName+$US+$sName+$US+$aName))){ $aName=$SENT }
+  $gAttr++
+  $g=_ggg ($s.date+$US+$cName+$US+$sName+$US+$aName) $s.date $cName $sName $aName; $g.sales++; $g.rev+=$s.rev
+}
+
+$gdailyArr=@($gdaily.Values | Sort-Object date)
+$ggrainArr=@($ggrain.Values | Where-Object { $_.spend -gt 0 -or $_.sales -gt 0 })
+$gtot=[pscustomobject]@{
+  spend=(_sum $gdailyArr 'spend'); impr=(_sum $gdailyArr 'impr'); clicks=(_sum $gdailyArr 'clicks'); sales=(_sum $gdailyArr 'sales'); rev=(_sum $gdailyArr 'rev'); salesAttr=$gAttr }
+
+$gnames=New-Object System.Collections.Generic.List[string]; $gnameIdx=@{}
+function _gni($nm){ if(-not $gnameIdx.ContainsKey($nm)){ $gnameIdx[$nm]=$gnames.Count; $gnames.Add($nm) }; return $gnameIdx[$nm] }
+$ggOut=@()
+foreach($g in $ggrainArr){
+  $ggOut += [pscustomobject]@{ d=$g.date; c=(_gni $g.campaign); s=(_gni $g.adset); a=(_gni $g.ad)
+    sp=[math]::Round($g.spend,2); im=[int]$g.impr; ck=[int]$g.clicks; vn=[int]$g.sales; rv=[math]::Round($g.rev,2) }
+}
+$gdOut=@()
+foreach($o in $gdailyArr){
+  $gdOut += [pscustomobject]@{ date=$o.date; spend=[math]::Round($o.spend,2); impr=[int]$o.impr; clicks=[int]$o.clicks; sales=[int]$o.sales; rev=[math]::Round($o.rev,2) }
+}
+$google=[pscustomobject]@{
+  dateMin=$gQMin; dateMax=$gQMax; salesInWindow=$gInWin
+  totals=$gtot; names=@($gnames); daily=@($gdOut); grain=@($ggOut) }
+
+# =====================================================================
 #  4) VENDAS (funil VSL completo) p/ a aba Vendas
 # =====================================================================
 $salesDaily=@()
@@ -293,7 +382,7 @@ catch { try { $nowBR=[System.TimeZoneInfo]::ConvertTimeBySystemTimeZoneId([DateT
 $utf8=[System.Text.UTF8Encoding]::new($false)
 $payload=[pscustomobject]@{
   generatedAt=$nowIso; generatedAtBR=$nowBR; taxMultiplier=$TAX; product='FDI - VSL'
-  meta=$meta; vendas=$vendas
+  meta=$meta; google=$google; vendas=$vendas
 }
 $json=$payload | ConvertTo-Json -Depth 12 -Compress
 [IO.File]::WriteAllText((Join-Path $root 'data.js'), ("window.VSL="+$json+";"), $utf8)
@@ -305,5 +394,7 @@ Write-Host ("OK  META funil: impr={0} 3s={1} 75%={2} cliques={3} lpv={4} chk={5}
 $fatTot=$tot.rev+$tot.upSales*0+$tot.upRev
 Write-Host ("OK  UPSELL (janela): {0} upsell(s) / R$ {1}  | fat total (FE+upsell)=R$ {2}  ROAS c/upsell={3}  produto={4}" -f `
   $tot.upSales,([double]$tot.upRev).ToString('N2',$BR),([double]$fatTot).ToString('N2',$BR),(([double](& { if($tot.spend -gt 0){$fatTot/$tot.spend}else{0} })).ToString('N2',$BR)),$upProdTop)
+Write-Host ("OK  GOOGLE (janela {0} -> {1})  dias={2} grain={3} SEM imposto  gasto=R$ {4}  impr={5} cliques={6}  vendas={7} fat=R$ {8}" -f `
+  $gQMin,$gQMax,$google.daily.Count,$google.grain.Count,($gtot.spend.ToString('N2',$BR)),$gtot.impr,$gtot.clicks,$gtot.sales,([double]$gtot.rev).ToString('N2',$BR))
 Write-Host ("OK  VENDAS VSL ({0} -> {1})  front-end={2} / R$ {3}   upsell={4} / R$ {5}   produto={6}" -f `
   $sMin,$sMax,$vTotFeS,([double]$vTotFeR).ToString('N2',$BR),$vTotUpS,([double]$vTotUpR).ToString('N2',$BR),$prodTop)

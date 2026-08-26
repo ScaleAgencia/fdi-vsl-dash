@@ -34,11 +34,17 @@ var META = prepMeta(D.meta);
 var VEN = D.vendas || {}; VEN.daily=arr(VEN.daily); VEN.byCamp=arr(VEN.byCamp); VEN.byAd=arr(VEN.byAd);
 var PRODUTO = VEN.product || 'Fórmula dos Investimentos';
 var UPPROD = VEN.upsellProduct || 'Prosperus';
+function prepGoogle(S){ S=S||{}; S.daily=arr(S.daily); var names=arr(S.names);
+  S._grain=arr(S.grain).map(function(g){ return { date:g.d, campaign:names[g.c]||'', adset:names[g.s]||'', ad:names[g.a]||'',
+    spend:+g.sp||0, impr:+g.im||0, clicks:+g.ck||0, sales:+g.vn||0, rev:+g.rv||0 }; }); return S; }
+var GOO = prepGoogle(D.google);
+var HAS_GOOGLE = GOO.daily.length>0;
 
 /* ---------- período global ---------- */
 function boundsOf(){
   var ds=[];
   META.daily.forEach(function(d){ if(isDate(d.date))ds.push(d.date); });
+  GOO.daily.forEach(function(d){ if(isDate(d.date))ds.push(d.date); });
   VEN.daily.forEach(function(d){ if(isDate(d.date))ds.push(d.date); });
   ds.sort(); return [ds[0]||'', ds[ds.length-1]||''];
 }
@@ -420,6 +426,144 @@ function renderVendas(rng){
   el('v-ad').innerHTML=ranking(VEN.byAd,true);
 }
 
+/* =================== GOOGLE (funil curto, sem imposto) =================== */
+var GMETS=['spend','impr','clicks','sales','rev'];
+function aggGoo(rng){ var o={}; GMETS.forEach(function(k){o[k]=0;});
+  GOO.daily.forEach(function(d){ if(!inRange(d.date,rng))return; GMETS.forEach(function(k){o[k]+=(d[k]||0);}); }); return o; }
+function gooDays(rng){ return GOO.daily.filter(function(d){return isDate(d.date)&&inRange(d.date,rng);}).sort(function(a,b){return a.date.localeCompare(b.date);}); }
+function renderGKpi(a,p){
+  var cpc=dv(a.spend,a.clicks), cpm=dv(a.spend,a.impr)*1000, ctr=dv(a.clicks,a.impr)*100, roas=dv(a.rev,a.spend), cac=dv(a.spend,a.sales);
+  var hero='<div class="kpi-hero" style="border-color:rgba(52,215,230,.42)"><div class="h-lab" style="color:var(--cy2)">Investimento Google · sem imposto</div>'
+    +'<div class="h-val">'+money(a.spend)+'</div>'
+    +'<div class="h-foot"><span><b>'+intf(a.impr)+'</b> impressões</span><span><b>'+intf(a.clicks)+'</b> cliques</span></div></div>';
+  var cards='';
+  cards+=kpiCard('cyan','Cliques',intf(a.clicks),
+    subRow('CPC', a.clicks?money(cpc):'—', trendHTML(cpc,dv(p.spend,p.clicks),false))
+    + subRow('CTR', a.impr?pct(ctr):'—', trendHTML(dv(a.clicks,a.impr),dv(p.clicks,p.impr),true)));
+  cards+=kpiCard('cyan','Impressões',intf(a.impr),
+    subRow('CPM', a.impr?money(cpm):'—', trendHTML(cpm,dv(p.spend,p.impr)*1000,false)));
+  cards+=kpiCard('gold','Vendas &amp; ROAS',intf(a.sales),
+    subRow('Faturamento', money0(a.rev), '')
+    + subRow('CPA', a.sales?money(cac):'—', '')
+    + subRow('ROAS', (a.spend>0&&a.sales>0)?roasf(roas):'—', ''));
+  el('g-kpi').innerHTML=hero+cards;
+}
+var GFN_W=[100,58,30], GFN_COL=['#6ef0fb','#34d7e6','#f6c445'];
+var GSTAGES=[
+  {k:'impr',l:'Impressões',cost:'CPM',costfn:function(a){return dv(a.spend,a.impr)*1000;},rate:'CTR',ratefn:function(a){return dv(a.clicks,a.impr);}},
+  {k:'clicks',l:'Cliques',cost:'CPC',costfn:function(a){return dv(a.spend,a.clicks);},rate:'Conversão',ratefn:function(a){return dv(a.sales,a.clicks);}},
+  {k:'sales',l:'Vendas',cost:'CPA',costfn:function(a){return dv(a.spend,a.sales);},rate:null}
+];
+function renderGFunnel(a,p){
+  var html='<div class="funnel">';
+  for(var i=0;i<GSTAGES.length;i++){
+    var s=GSTAGES[i], val=a[s.k]||0, cost=s.costfn(a), pcost=s.costfn(p);
+    var costHtml='<div class="fs-v">'+money(cost)+'</div><div>'+s.cost+' '+trendHTML(cost,pcost,false)+'</div>';
+    var rateHtml=''; if(s.rate){ var rt=s.ratefn(a),prt=s.ratefn(p); rateHtml='<div class="fs-v">'+pct(rt*100)+'</div><div>'+s.rate+' '+trendHTML(rt,prt,true)+'</div>'; }
+    html+='<div class="fn-stage"><div class="fn-side right">'+costHtml+'</div>'
+      +'<div class="fn-bar-wrap"><div class="fn-bar" style="width:'+GFN_W[i]+'%;background:linear-gradient(180deg,'+GFN_COL[i]+',rgba(0,0,0,.14))">'
+      +'<span class="fn-n">'+intf(val)+'</span><span class="fn-l">'+s.l+'</span></div></div>'
+      +'<div class="fn-side">'+rateHtml+'</div></div>';
+    if(i<GSTAGES.length-1) html+='<div class="fn-rate"><span class="ar">↓</span></div>';
+  }
+  html+='</div>'; el('g-funnel').innerHTML=html;
+}
+function renderGDaily(rng){
+  var rows=gooDays(rng).slice().sort(function(a,b){return b.date.localeCompare(a.date);});
+  var maxS=Math.max.apply(null,rows.map(function(r){return r.spend||0;}).concat([0.01]));
+  var head='<thead><tr><th>Dia</th><th>Investimento</th><th>Impr.</th><th>Cliques</th><th>CPC</th><th>CTR</th><th>Vendas</th><th>Faturamento</th><th>ROAS</th></tr></thead>';
+  var body=rows.map(function(r){ var cpc=dv(r.spend,r.clicks), ctr=dv(r.clicks,r.impr)*100, roas=dv(r.rev,r.spend);
+    return '<tr><td>'+fmtBR(r.date)+'</td>'
+      +'<td class="num"><span class="heatcell" style="'+heatBg('52,215,230',r.spend/maxS)+'">'+money(r.spend)+'</span></td>'
+      +'<td class="num">'+intf(r.impr)+'</td><td class="num">'+intf(r.clicks)+'</td>'
+      +'<td class="num">'+(r.clicks?money(cpc):'—')+'</td><td class="num">'+(r.impr?pct(ctr):'—')+'</td>'
+      +'<td class="num">'+intf(r.sales)+'</td><td class="num">'+money0(r.rev)+'</td>'
+      +'<td class="num">'+((r.spend>0&&r.sales>0)?'<span class="roas-pill '+roasClass(roas)+'">'+roasf(roas)+'</span>':'—')+'</td></tr>'; }).join('');
+  if(!rows.length) body='<tr><td colspan="9" class="empty">Sem dados no período.</td></tr>';
+  var a=aggGoo(rng), tcpc=dv(a.spend,a.clicks), tctr=dv(a.clicks,a.impr)*100, troas=dv(a.rev,a.spend);
+  var foot='<tfoot><tr><td>Total</td><td class="num">'+money(a.spend)+'</td><td class="num">'+intf(a.impr)+'</td><td class="num">'+intf(a.clicks)+'</td><td class="num">'+(a.clicks?money(tcpc):'—')+'</td><td class="num">'+(a.impr?pct(tctr):'—')+'</td><td class="num">'+intf(a.sales)+'</td><td class="num">'+money0(a.rev)+'</td><td class="num">'+((a.spend>0&&a.sales>0)?roasf(troas):'—')+'</td></tr></tfoot>';
+  el('g-daily').innerHTML=head+'<tbody>'+body+'</tbody>'+foot;
+}
+/* árvore Google (sortable) */
+function gNewNode(name,full){ return {name:name,full:full,spend:0,impr:0,clicks:0,sales:0,rev:0,kids:{}}; }
+function gAccum(n,r){ n.spend+=r.spend||0;n.impr+=r.impr||0;n.clicks+=r.clicks||0;n.sales+=r.sales||0;n.rev+=r.rev||0; }
+var gExpanded={}, gTreeInit=false, gTreeSort={key:'spend',rev:false};
+function gBuildTree(rows){ var c={}; rows.forEach(function(r){
+  var cn=c[r.campaign]||(c[r.campaign]=gNewNode(prettyName(r.campaign),r.campaign)); gAccum(cn,r);
+  var sn=cn.kids[r.adset]||(cn.kids[r.adset]=gNewNode(prettyName(r.adset),r.adset)); gAccum(sn,r);
+  var an=sn.kids[r.ad]||(sn.kids[r.ad]=gNewNode(prettyName(r.ad),r.ad)); gAccum(an,r); }); return c; }
+function gActTag(n,medR){
+  if(n.spend>0 && n.sales===0) return {t:(n.clicks>0?'Sem venda':'Aquecendo'),c:'act-ins'};
+  if(n.sales<1) return {t:'—',c:'act-ins'};
+  if(medR<=0) return {t:'Manter',c:'act-mant'};
+  var r=dv(n.rev,n.spend)/medR;
+  if(r>=1.2) return {t:'Acelerar',c:'act-acel'};
+  if(r<=0.6) return {t:'Revisar',c:'act-rev'};
+  return {t:'Manter',c:'act-mant'};
+}
+function gCells(n,medR,medC){ var roas=dv(n.rev,n.spend), cac=(n.sales>0&&n.spend>0)?dv(n.spend,n.sales):null, tag=gActTag(n,medR);
+  var cpm=n.impr>0?dv(n.spend,n.impr)*1000:null, ctr=n.impr>0?dv(n.clicks,n.impr)*100:null, cpc=n.clicks>0?dv(n.spend,n.clicks):null;
+  return '<td class="num">'+money(n.spend)+'</td>'
+    +'<td class="num">'+(cpm!=null?money(cpm):'—')+'</td>'
+    +'<td class="num">'+(ctr!=null?pct(ctr):'—')+'</td>'
+    +'<td class="num">'+(cpc!=null?money(cpc):'—')+'</td>'
+    +'<td class="num">'+intf(n.sales)+'</td>'
+    +'<td class="num">'+(cac!=null?'<span class="cac-pill '+cacClass(cac,medC)+'">'+money0(cac)+'</span>':'—')+'</td>'
+    +'<td class="num">'+money0(n.rev)+'</td>'
+    +'<td class="num">'+((n.spend>0&&n.sales>0)?'<span class="roas-pill '+roasClass(roas)+'">'+roasf(roas)+'</span>':'—')+'</td>'
+    +'<td class="num"><span class="act '+tag.c+'">'+tag.t+'</span></td>'; }
+function gTreeRow(n,lvl,key,hasKids,medR,medC){
+  var caret=hasKids?'<span class="caret'+(gExpanded[key]?' open':'')+'">▶</span>':'<span class="caret" style="opacity:.2">•</span>';
+  return '<tr class="lvl'+lvl+(hasKids?' parent':'')+'" data-key="'+encodeURIComponent(key)+'"><td><span class="name" title="'+esc(n.full||n.name)+'">'+caret+' '+esc(n.name)+'</span></td>'+gCells(n,medR,medC)+'</tr>';
+}
+var G_COLS=[{k:'name',l:'Campanha › Grupo › Anúncio'},{k:'spend',l:'Gasto'},{k:'cpm',l:'CPM'},{k:'ctr',l:'CTR'},{k:'cpc',l:'CPC'},{k:'sales',l:'Vendas'},{k:'cac',l:'CPA'},{k:'rev',l:'Faturamento'},{k:'roas',l:'ROAS'},{k:'act',l:'Ação'}];
+function gSortVal(key,n){
+  if(key==='spend') return -(n.spend||0);
+  if(key==='sales') return -(n.sales||0);
+  if(key==='rev')   return -(n.rev||0);
+  if(key==='cpm')   return n.impr>0?dv(n.spend,n.impr)*1000:Infinity;
+  if(key==='ctr')   return n.impr>0?-dv(n.clicks,n.impr):Infinity;
+  if(key==='cpc')   return n.clicks>0?dv(n.spend,n.clicks):Infinity;
+  if(key==='cac')   return (n.sales>0&&n.spend>0)?dv(n.spend,n.sales):Infinity;
+  if(key==='roas')  return (n.spend>0&&n.sales>0)?-dv(n.rev,n.spend):Infinity;
+  return 0;
+}
+function renderGTree(rng){
+  var ss=gTreeSort, rows=GOO._grain.filter(function(r){return inRange(r.date,rng);});
+  var camps=gBuildTree(rows);
+  var leafR=[],leafC=[]; Object.keys(camps).forEach(function(cK){ if(cK==='SEM_RASTREIO')return; var c=camps[cK]; Object.keys(c.kids).forEach(function(sK){ var sN=c.kids[sK]; Object.keys(sN.kids).forEach(function(aK){ var an=sN.kids[aK]; if(an.spend>0&&an.sales>0){leafR.push(dv(an.rev,an.spend));leafC.push(dv(an.spend,an.sales));} }); }); });
+  var medR=median(leafR), medC=median(leafC);
+  function cmp(a,b){ if(ss.key==='name'){ var rn=String(a.name).localeCompare(String(b.name),'pt',{numeric:true}); return ss.rev?-rn:rn; }
+    var va=gSortVal(ss.key,a), vb=gSortVal(ss.key,b), na=!isFinite(va), nb=!isFinite(vb);
+    if(na&&nb) return (b.spend||0)-(a.spend||0); if(na) return 1; if(nb) return -1;
+    var r=va-vb; if(r===0){ r=(b.spend||0)-(a.spend||0); } return ss.rev?-r:r; }
+  function skeys(obj){ return Object.keys(obj).sort(function(x,y){ return cmp(obj[x],obj[y]); }); }
+  var order=skeys(camps);
+  if(!gTreeInit){ order.slice(0,4).forEach(function(cK){ gExpanded['c:'+cK]=true; }); gTreeInit=true; }
+  var head='<thead><tr>'+G_COLS.map(function(c){ var on=ss.key===c.k;
+    return '<th class="sortable'+(on?' sorton':'')+'" data-col="'+c.k+'">'+c.l+(on?' <span class="sarr">'+(ss.rev?'▲':'▼')+'</span>':'')+'</th>'; }).join('')+'</tr></thead>';
+  var out=[];
+  order.forEach(function(cK){ var c=camps[cK],cKey='c:'+cK,cHas=Object.keys(c.kids).length>0; out.push(gTreeRow(c,0,cKey,cHas,medR,medC));
+    if(gExpanded[cKey]){ skeys(c.kids).forEach(function(sK){ var sN=c.kids[sK],sKey=cKey+'|s:'+sK,sHas=Object.keys(sN.kids).length>0; out.push(gTreeRow(sN,1,sKey,sHas,medR,medC));
+      if(gExpanded[sKey]){ skeys(sN.kids).forEach(function(aK){ out.push(gTreeRow(sN.kids[aK],2,sKey+'|a:'+aK,false,medR,medC)); }); } }); } });
+  if(!out.length) out.push('<tr><td colspan="10" class="empty">Sem dados no período.</td></tr>');
+  var tEl=el('g-tree'); tEl.innerHTML=head+'<tbody>'+out.join('')+'</tbody>';
+  el('g-treeLegend').innerHTML='<span style="color:var(--muted2)">Google começou agora — enquanto não vende, as ações ficam neutras (Aquecendo/Sem venda). Clique num cabeçalho p/ ordenar.</span>';
+  Array.prototype.forEach.call(tEl.querySelectorAll('th.sortable'),function(th){
+    th.addEventListener('click',function(){ var k=th.getAttribute('data-col'), s=gTreeSort; if(s.key===k){ s.rev=!s.rev; } else { s.key=k; s.rev=false; } renderGTree(rangeFor(period)); }); });
+  Array.prototype.forEach.call(tEl.querySelectorAll('tr.parent'),function(tr){
+    tr.addEventListener('click',function(){ var k=decodeURIComponent(tr.getAttribute('data-key')); gExpanded[k]=!gExpanded[k]; renderGTree(rangeFor(period)); }); });
+}
+function renderGoogle(rng,prng){
+  var a=aggGoo(rng), p=aggGoo(prng);
+  renderGKpi(a,p); renderGFunnel(a,p); renderGDaily(rng); renderGTree(rng);
+  var win=(GOO.dateMin&&GOO.dateMax)?(fmtBR(GOO.dateMin)+' → '+fmtBR(GOO.dateMax)):'—';
+  el('g-cov').innerHTML='<b>Google Ads / YouTube</b> · funil curto, <b>sem imposto</b> (o ×13,85% é só do Meta). '
+    +(a.sales>0 ? ('<b>'+intf(a.sales)+'</b> venda(s) · faturamento <b>'+money0(a.rev)+'</b> · ROAS <span class="cy">'+roasf(dv(a.rev,a.spend))+'</span>.')
+                : 'Ainda <b>sem venda atribuída</b> — mostrando <b>investimento e tráfego</b>. Quando a 1ª venda Google cair (utm_source google-ads casando com estas campanhas), ROAS/CPA/atribuição por criativo aparecem sozinhos.')
+    +' Queries: '+win+'.';
+}
+
 /* =================== ORQUESTRAÇÃO =================== */
 function renderMeta(rng,prng){
   var a=aggMeta(rng), p=aggMeta(prng), days=metaDays(rng);
@@ -427,7 +571,7 @@ function renderMeta(rng,prng){
   renderInsights(rng); renderDaily(rng); renderTree(rng);
 }
 function renderAll(){ var rng=rangeFor(period), prng=prevRange(rng);
-  renderMeta(rng,prng); renderVendas(rng); }
+  renderMeta(rng,prng); if(HAS_GOOGLE) renderGoogle(rng,prng); renderVendas(rng); }
 
 /* período UI */
 function periodsHTML(){ return PRESETS.map(function(p){return '<button data-k="'+p.k+'" class="pbtn">'+p.label+'</button>';}).join('')
@@ -442,10 +586,12 @@ function initPeriods(){ el('periods').innerHTML=periodsHTML();
   function onDate(){ var s=de.value,e=at.value; if(!s||!e)return; if(s>e){var t=s;s=e;e=t;} if(s<minDate)s=minDate; if(e>maxDate)e=maxDate; customRange=[s,e]; period='custom'; syncPeriodUI(); renderAll(); }
   de.addEventListener('change',onDate); at.addEventListener('change',onDate); syncPeriodUI(); }
 
-var TABS=['meta','vendas'];
+var TABS=['meta','google','vendas'];
 function activateTab(id){ Array.prototype.forEach.call(document.querySelectorAll('.tab'),function(x){x.classList.toggle('active',x.getAttribute('data-tab')===id);});
-  TABS.forEach(function(k){ el('tab-'+k).classList.toggle('hidden',k!==id); }); }
-function initTabs(){ Array.prototype.forEach.call(document.querySelectorAll('.tab'),function(t){ t.addEventListener('click',function(){ var id=t.getAttribute('data-tab'); activateTab(id); if(history.replaceState)history.replaceState(null,'','#'+id); }); });
+  TABS.forEach(function(k){ var e=el('tab-'+k); if(e)e.classList.toggle('hidden',k!==id); }); }
+function initTabs(){
+  if(!HAS_GOOGLE){ var gt=document.querySelector('.tab[data-tab=google]'); if(gt)gt.style.display='none'; var gs=el('tab-google'); if(gs)gs.remove(); }
+  Array.prototype.forEach.call(document.querySelectorAll('.tab'),function(t){ t.addEventListener('click',function(){ var id=t.getAttribute('data-tab'); activateTab(id); if(history.replaceState)history.replaceState(null,'','#'+id); }); });
   var h=(location.hash||'').replace('#',''); if(TABS.indexOf(h)>=0)activateTab(h);
   window.addEventListener('hashchange',function(){ var k=(location.hash||'').replace('#',''); if(TABS.indexOf(k)>=0)activateTab(k); }); }
 function initCoverage(){ el('updated').textContent=D.generatedAtBR||'—'; el('taxf').textContent=(D.taxMultiplier||1.1385).toFixed(4).replace('.',',');
