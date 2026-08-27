@@ -41,13 +41,33 @@
   <div class="coverage" id="coverage"></div>
 
   <nav class="tabs" id="tabs">
-    <button class="tab active" data-tab="meta"><span class="tdot" style="background:#8b5cf6"></span>Meta Ads · Funil VSL</button>
+    <button class="tab active" data-tab="geral"><span class="tdot" style="background:#c9b3ff"></span>Visão Geral</button>
+    <button class="tab" data-tab="meta"><span class="tdot" style="background:#8b5cf6"></span>Meta Ads · Funil VSL</button>
     <button class="tab" data-tab="google"><span class="tdot" style="background:#34d7e6"></span>Google · Funil</button>
     <button class="tab" data-tab="vendas"><span class="tdot" style="background:#f6c445"></span>Vendas</button>
   </nav>
 
+  <!-- ============ VISÃO GERAL (Meta + Google) ============ -->
+  <section class="panel-tab" id="tab-geral">
+    <div class="quad" id="ge-quad"></div>
+    <div class="row-2">
+      <div class="card">
+        <div class="card-h">Participação Meta × Google <span class="hint">investimento · faturamento · vendas</span></div>
+        <div id="ge-split"></div>
+      </div>
+      <div class="card">
+        <div class="card-h">Comparativo por origem <span class="hint">Meta (c/ imposto) × Google (sem imposto)</span></div>
+        <div class="table-scroll"><table class="tbl" id="ge-cmp"></table></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h">Visão diária combinada <span class="hint">Meta + Google · faturamento c/ upsell · mais recente no topo</span></div>
+      <div class="table-scroll"><table class="tbl" id="ge-daily"></table></div>
+    </div>
+  </section>
+
   <!-- ============ META ADS (funil VSL) ============ -->
-  <section class="panel-tab" id="tab-meta">
+  <section class="panel-tab hidden" id="tab-meta">
     <div class="funil-grid">
       <div class="kpi-col" id="m-kpi"></div>
       <div class="card" style="margin-bottom:0">

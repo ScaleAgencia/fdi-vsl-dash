@@ -55,6 +55,7 @@ b{font-weight:700}
 .tab:hover{color:var(--ink2)}
 .tab.active{color:var(--ink);border-bottom-color:var(--vio)}
 .tab .tdot{width:8px;height:8px;border-radius:50%}
+.tab.active[data-tab=geral]{border-bottom-color:var(--vio2)}
 .tab.active[data-tab=google]{border-bottom-color:var(--cy)}
 .tab.active[data-tab=vendas]{border-bottom-color:var(--gold)}
 .panel-tab.hidden{display:none}

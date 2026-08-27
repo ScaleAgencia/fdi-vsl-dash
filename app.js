@@ -564,6 +564,46 @@ function renderGoogle(rng,prng){
     +' Queries: '+win+'.';
 }
 
+/* =================== GERAL (Meta + Google) =================== */
+function renderGeral(rng,prng){
+  var m=aggMeta(rng), g=aggGoo(rng);
+  var mInvest=m.spend, gInvest=g.spend, invest=mInvest+gInvest;
+  var mRevAll=m.rev+(m.upRev||0), gRev=g.rev, fatTot=mRevAll+gRev, fatFe=m.rev+gRev, upRev=m.upRev||0;
+  var mSales=m.sales, gSales=g.sales, salesFe=mSales+gSales, upSales=m.upSales||0;
+  var roas=dv(fatTot,invest), lucro=fatTot-invest;
+  el('ge-quad').innerHTML=
+    qcard('big','Investimento Total',money0(invest),'Meta c/ imposto <b>'+money0(mInvest)+'</b> + Google <b>'+money0(gInvest)+'</b>')
+    +qcard('gold','Faturamento Total',money0(fatTot),'front-end <b>'+money0(fatFe)+'</b> + upsell <b>'+money0(upRev)+'</b>')
+    +qcard('','Vendas',intf(salesFe),'front-end'+((upSales>0)?(' · <b>'+intf(upSales)+'</b> upsell'):'')+((gSales>0)?(' · Google <b>'+intf(gSales)+'</b>'):''))
+    +qcard('gold','ROAS Geral',roasf(roas),'lucro <b class="'+(lucro>=0?'pos':'neg')+'">'+money0(lucro)+'</b> · '+(roas>=1?'no lucro':pct(roas*100)+' do break-even'));
+  function sBar(title,vm,vg){ var t=vm+vg; if(t<=0)t=1; var wm=vm/t*100,wg=vg/t*100;
+    return '<div style="font-size:11.5px;color:var(--muted);margin:2px 0 3px">'+title+'</div><div class="split">'
+      +(wm>0?'<span style="width:'+wm.toFixed(1)+'%;background:'+COL.vio+'" title="Meta">'+(wm>10?nf0.format(Math.round(wm))+'%':'')+'</span>':'')
+      +(wg>0?'<span style="width:'+wg.toFixed(1)+'%;background:'+COL.cy+'" title="Google">'+(wg>10?nf0.format(Math.round(wg))+'%':'')+'</span>':'')+'</div>'; }
+  el('ge-split').innerHTML=sBar('Investimento',mInvest,gInvest)+sBar('Faturamento',mRevAll,gRev)+sBar('Vendas',mSales,gSales)
+    +'<div class="split-leg"><span><span class="dot" style="background:'+COL.vio+'"></span>Meta Ads</span><span><span class="dot" style="background:'+COL.cy+'"></span>Google/YouTube</span></div>';
+  function row(name,dot,inv,sales,rev){ var rz=dv(rev,inv), sh=dv(inv,invest)*100;
+    return '<tr><td><span class="srcname"><span class="sd" style="background:'+dot+'"></span>'+name+'</span></td>'
+      +'<td class="num">'+money0(inv)+'</td><td class="num">'+intf(sales)+'</td><td class="num">'+money0(rev)+'</td>'
+      +'<td class="num">'+((inv>0&&rev>0)?'<span class="roas-pill '+roasClass(rz)+'">'+roasf(rz)+'</span>':'—')+'</td><td class="num">'+pct(sh)+'</td></tr>'; }
+  var totRow='<tr><td>Total</td><td class="num">'+money0(invest)+'</td><td class="num">'+intf(salesFe)+'</td><td class="num">'+money0(fatTot)+'</td><td class="num">'+(invest>0?roasf(roas):'—')+'</td><td class="num">100%</td></tr>';
+  el('ge-cmp').innerHTML='<thead><tr><th>Origem</th><th>Investimento</th><th>Vendas</th><th>Faturamento</th><th>ROAS</th><th>% inv.</th></tr></thead><tbody>'
+    +row('Meta Ads (c/ imposto)',COL.vio,mInvest,mSales,mRevAll)+row('Google / YouTube',COL.cy,gInvest,gSales,gRev)+'</tbody><tfoot>'+totRow+'</tfoot>';
+  var map={};
+  META.daily.forEach(function(d){ if(!inRange(d.date,rng))return; var o=map[d.date]||(map[d.date]={date:d.date,mS:0,gS:0,rev:0,sales:0}); o.mS+=d.spend||0; o.rev+=(d.rev||0)+(d.upRev||0); o.sales+=(d.sales||0); });
+  GOO.daily.forEach(function(d){ if(!inRange(d.date,rng))return; var o=map[d.date]||(map[d.date]={date:d.date,mS:0,gS:0,rev:0,sales:0}); o.gS+=d.spend||0; o.rev+=(d.rev||0); o.sales+=(d.sales||0); });
+  var rows=Object.keys(map).map(function(k){return map[k];}).sort(function(a,b){return b.date.localeCompare(a.date);});
+  var head='<thead><tr><th>Dia</th><th>Inv. Meta</th><th>Inv. Google</th><th>Inv. Total</th><th>Vendas</th><th>Faturamento</th><th>ROAS</th><th>Lucro</th></tr></thead>';
+  var body=rows.map(function(r){ var inv=r.mS+r.gS, rz=dv(r.rev,inv), luc=r.rev-inv;
+    return '<tr><td>'+fmtBR(r.date)+'</td><td class="num">'+money0(r.mS)+'</td><td class="num">'+money0(r.gS)+'</td><td class="num">'+money0(inv)+'</td>'
+      +'<td class="num">'+intf(r.sales)+'</td><td class="num">'+money0(r.rev)+'</td>'
+      +'<td class="num">'+(inv>0?'<span class="roas-pill '+roasClass(rz)+'">'+roasf(rz)+'</span>':'—')+'</td>'
+      +'<td class="num '+(luc>=0?'pos':'neg')+'">'+money0(luc)+'</td></tr>'; }).join('');
+  if(!rows.length) body='<tr><td colspan="8" class="empty">Sem dados no período.</td></tr>';
+  var foot='<tfoot><tr><td>Total</td><td class="num">'+money0(mInvest)+'</td><td class="num">'+money0(gInvest)+'</td><td class="num">'+money0(invest)+'</td><td class="num">'+intf(salesFe)+'</td><td class="num">'+money0(fatTot)+'</td><td class="num">'+(invest>0?roasf(roas):'—')+'</td><td class="num '+(lucro>=0?'pos':'neg')+'">'+money0(lucro)+'</td></tr></tfoot>';
+  el('ge-daily').innerHTML=head+'<tbody>'+body+'</tbody>'+foot;
+}
+
 /* =================== ORQUESTRAÇÃO =================== */
 function renderMeta(rng,prng){
   var a=aggMeta(rng), p=aggMeta(prng), days=metaDays(rng);
@@ -571,7 +611,7 @@ function renderMeta(rng,prng){
   renderInsights(rng); renderDaily(rng); renderTree(rng);
 }
 function renderAll(){ var rng=rangeFor(period), prng=prevRange(rng);
-  renderMeta(rng,prng); if(HAS_GOOGLE) renderGoogle(rng,prng); renderVendas(rng); }
+  renderGeral(rng,prng); renderMeta(rng,prng); if(HAS_GOOGLE) renderGoogle(rng,prng); renderVendas(rng); }
 
 /* período UI */
 function periodsHTML(){ return PRESETS.map(function(p){return '<button data-k="'+p.k+'" class="pbtn">'+p.label+'</button>';}).join('')
@@ -586,7 +626,7 @@ function initPeriods(){ el('periods').innerHTML=periodsHTML();
   function onDate(){ var s=de.value,e=at.value; if(!s||!e)return; if(s>e){var t=s;s=e;e=t;} if(s<minDate)s=minDate; if(e>maxDate)e=maxDate; customRange=[s,e]; period='custom'; syncPeriodUI(); renderAll(); }
   de.addEventListener('change',onDate); at.addEventListener('change',onDate); syncPeriodUI(); }
 
-var TABS=['meta','google','vendas'];
+var TABS=['geral','meta','google','vendas'];
 function activateTab(id){ Array.prototype.forEach.call(document.querySelectorAll('.tab'),function(x){x.classList.toggle('active',x.getAttribute('data-tab')===id);});
   TABS.forEach(function(k){ var e=el('tab-'+k); if(e)e.classList.toggle('hidden',k!==id); }); }
 function initTabs(){
