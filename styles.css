@@ -188,6 +188,18 @@ b{font-weight:700}
 .tree .parent{cursor:pointer}
 .tree .parent:hover{background:rgba(139,92,246,.08)}
 .tree .name{overflow:hidden;text-overflow:ellipsis;max-width:340px;display:inline-block;vertical-align:bottom}
+.tree .name.filt{cursor:pointer}
+.tree .name.filt:hover{color:var(--vio2);text-decoration:underline}
+.tree tr.filt-on{background:rgba(139,92,246,.16)!important;box-shadow:inset 3px 0 0 var(--vio)}
+.tree tr.filt-on .name{color:var(--vio2);font-weight:800}
+/* barra de filtro dos graficos */
+.chart-filter{margin-bottom:12px;font-size:12.5px;min-height:20px}
+.chart-filter .cf-hint{color:var(--muted2)}
+.chart-filter .cf-hint b{color:var(--muted)}
+.chart-filter .cf-chip{display:inline-flex;align-items:center;gap:9px;background:var(--vio-dim);border:1px solid rgba(139,92,246,.4);border-radius:999px;padding:6px 8px 6px 14px;color:var(--ink2);max-width:100%}
+.chart-filter .cf-chip b{color:var(--vio2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:640px}
+.chart-filter .cf-chip button{background:var(--panel);border:1px solid var(--line);color:var(--muted);border-radius:999px;padding:3px 11px;font-size:11px;font-weight:700;cursor:pointer;flex:none}
+.chart-filter .cf-chip button:hover{color:var(--ink);border-color:var(--vio)}
 .tree-legend{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px;font-size:11.5px;color:var(--muted)}
 .tree-legend .dot{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:5px;vertical-align:middle}
 

@@ -244,6 +244,34 @@ function renderDaily(rng){
   el('m-daily').innerHTML=head+'<tbody>'+body+'</tbody>'+foot;
 }
 
+/* =================== FILTRO por campanha/conjunto/anúncio (gráficos Meta) =================== */
+var treeFilter=null; // {campaign, adset, ad} ou null
+function nodeMatchesFilter(r){
+  if(!treeFilter) return true;
+  if(treeFilter.campaign!=null && r.campaign!==treeFilter.campaign) return false;
+  if(treeFilter.adset!=null && r.adset!==treeFilter.adset) return false;
+  if(treeFilter.ad!=null && r.ad!==treeFilter.ad) return false;
+  return true;
+}
+function filteredMetaDays(rng){
+  if(!treeFilter) return metaDays(rng);
+  var map={};
+  META._grain.forEach(function(r){ if(!inRange(r.date,rng))return; if(!nodeMatchesFilter(r))return;
+    var o=map[r.date]||(map[r.date]={date:r.date,spend:0,spendRaw:0,impr:0,clicks:0,lpv:0,checkout:0,sales:0,rev:0,upSales:0,upRev:0});
+    o.spend+=r.spend||0;o.spendRaw+=r.spendRaw||0;o.impr+=r.impr||0;o.clicks+=r.clicks||0;o.lpv+=r.lpv||0;o.checkout+=r.checkout||0;o.sales+=r.sales||0;o.rev+=r.rev||0; });
+  return Object.keys(map).map(function(k){return map[k];}).sort(function(a,b){return a.date.localeCompare(b.date);});
+}
+function filterLabel(){ if(!treeFilter) return '';
+  var parts=[]; if(treeFilter.campaign!=null)parts.push(treeFilter.campaign); if(treeFilter.adset!=null)parts.push(treeFilter.adset); if(treeFilter.ad!=null)parts.push(treeFilter.ad);
+  return parts.map(function(x){return x==='SEM_RASTREIO'?'— sem rastreio —':x;}).join(' › '); }
+function renderChartFilter(){
+  var e=el('m-chartFilter'); if(!e)return;
+  if(!treeFilter){ e.innerHTML='<span class="cf-hint">💡 clique no nome de uma <b>campanha, conjunto ou anúncio</b> na tabela de otimização (abaixo) p/ filtrar estes 2 gráficos só por ela</span>'; return; }
+  e.innerHTML='<span class="cf-chip">Filtrando por: <b>'+esc(filterLabel())+'</b> <button id="cf-clear" title="limpar filtro">✕ limpar</button></span>';
+  var b=el('cf-clear'); if(b)b.addEventListener('click',function(){ treeFilter=null; applyChartFilter(); });
+}
+function applyChartFilter(){ var days=filteredMetaDays(rangeFor(period)); renderChartSales(days); renderChartRoas(days); renderChartFilter(); }
+
 /* =================== OTIMIZAÇÃO (árvore) =================== */
 function prettyName(x){ return x==='SEM_RASTREIO' ? '— sem rastreio —' : x; }
 function newNode(name,full){ return {name:name,full:full,spend:0,impr:0,reach:0,clicks:0,lpv:0,v3:0,v75:0,checkout:0,mpur:0,mrev:0,sales:0,rev:0,kids:{}}; }
@@ -282,9 +310,13 @@ function metricsCells(n,medRoas,medCac){ var roas=dv(n.rev,n.spend), cac=(n.sale
     +'<td class="num">'+money0(n.rev)+'</td>'
     +'<td class="num">'+(n.spend>0?'<span class="roas-pill '+roasClass(roas)+'">'+roasf(roas)+'</span>':'—')+'</td>'
     +'<td class="num"><span class="act '+tag.c+'">'+tag.t+'</span></td>'; }
-function treeRow(n,lvl,key,hasKids,medR,medC){
+function treeRow(n,lvl,key,hasKids,medR,medC,fd){
   var caret=hasKids?'<span class="caret'+(expanded[key]?' open':'')+'">▶</span>':'<span class="caret" style="opacity:.2">•</span>';
-  return '<tr class="lvl'+lvl+(hasKids?' parent':'')+'" data-key="'+encodeURIComponent(key)+'"><td><span class="name" title="'+esc(n.full||n.name)+'">'+caret+' '+esc(n.name)+'</span></td>'+metricsCells(n,medR,medC)+'</tr>';
+  var da='data-fc="'+encodeURIComponent((fd&&fd.campaign!=null)?fd.campaign:'')+'"';
+  if(fd&&fd.adset!=null) da+=' data-fs="'+encodeURIComponent(fd.adset)+'"';
+  if(fd&&fd.ad!=null) da+=' data-fa="'+encodeURIComponent(fd.ad)+'"';
+  var isF=treeFilter && (fd&&fd.campaign===treeFilter.campaign) && ((fd.adset==null?null:fd.adset)===(treeFilter.adset==null?null:treeFilter.adset)) && ((fd.ad==null?null:fd.ad)===(treeFilter.ad==null?null:treeFilter.ad));
+  return '<tr class="lvl'+lvl+(hasKids?' parent':'')+(isF?' filt-on':'')+'" data-key="'+encodeURIComponent(key)+'"><td>'+caret+'<span class="name filt" '+da+' title="filtrar gráficos por: '+esc(n.full||n.name)+'">'+esc(n.name)+'</span></td>'+metricsCells(n,medR,medC)+'</tr>';
 }
 var treeSort={key:'rev',rev:false};
 var ACT_RANK={'Acelerar':0,'Manter':1,'Revisar':2,'Pausar':3,'s/ gasto':4,'Dado insuf.':5};
@@ -328,9 +360,9 @@ function renderTree(rng){
   var head='<thead><tr>'+TREE_COLS.map(function(c){ var on=ss.key===c.k;
     return '<th class="sortable'+(on?' sorton':'')+'" data-col="'+c.k+'">'+c.l+(on?' <span class="sarr">'+(ss.rev?'▲':'▼')+'</span>':'')+'</th>'; }).join('')+'</tr></thead>';
   var out=[];
-  order.forEach(function(cK){ var c=camps[cK],cKey='c:'+cK,cHas=Object.keys(c.kids).length>0; out.push(treeRow(c,0,cKey,cHas,medR,medC));
-    if(expanded[cKey]){ skeys(c.kids).forEach(function(sK){ var sN=c.kids[sK],sKey=cKey+'|s:'+sK,sHas=Object.keys(sN.kids).length>0; out.push(treeRow(sN,1,sKey,sHas,medR,medC));
-      if(expanded[sKey]){ skeys(sN.kids).forEach(function(aK){ out.push(treeRow(sN.kids[aK],2,sKey+'|a:'+aK,false,medR,medC)); }); } }); } });
+  order.forEach(function(cK){ var c=camps[cK],cKey='c:'+cK,cHas=Object.keys(c.kids).length>0; out.push(treeRow(c,0,cKey,cHas,medR,medC,{campaign:cK}));
+    if(expanded[cKey]){ skeys(c.kids).forEach(function(sK){ var sN=c.kids[sK],sKey=cKey+'|s:'+sK,sHas=Object.keys(sN.kids).length>0; out.push(treeRow(sN,1,sKey,sHas,medR,medC,{campaign:cK,adset:sK}));
+      if(expanded[sKey]){ skeys(sN.kids).forEach(function(aK){ out.push(treeRow(sN.kids[aK],2,sKey+'|a:'+aK,false,medR,medC,{campaign:cK,adset:sK,ad:aK})); }); } }); } });
   if(!out.length) out.push('<tr><td colspan="16" class="empty">Sem dados no período.</td></tr>');
   var tEl=el('m-tree'); tEl.innerHTML=head+'<tbody>'+out.join('')+'</tbody>';
   el('m-treeLegend').innerHTML='<span><span class="act act-acel">Acelerar</span> ROAS ≥ 1,2× a mediana</span><span><span class="act act-rev">Revisar</span> ROAS ≤ 0,6×</span><span><span class="act act-pause">Pausar</span> gastou e não vendeu</span><span style="color:var(--muted2)">Hook=3s/impr · Hold=75%/3s · <b>LP→Chk</b>=checkout/view LP · <b>Chk→Compra</b>=venda/checkout · <b>Conv. total</b>=venda/view LP · clique num cabeçalho p/ ordenar</span>';
@@ -339,6 +371,16 @@ function renderTree(rng){
       if(s.key===k){ s.rev=!s.rev; } else { s.key=k; s.rev=false; } renderTree(rangeFor(period)); }); });
   Array.prototype.forEach.call(tEl.querySelectorAll('tr.parent'),function(tr){
     tr.addEventListener('click',function(){ var k=decodeURIComponent(tr.getAttribute('data-key')); expanded[k]=!expanded[k]; renderTree(rangeFor(period)); }); });
+  // clique no NOME filtra os graficos por aquela campanha/conjunto/anuncio (nao mexe no expand da linha)
+  Array.prototype.forEach.call(tEl.querySelectorAll('.name.filt'),function(sp){
+    sp.addEventListener('click',function(ev){ ev.stopPropagation();
+      var fc=sp.getAttribute('data-fc'), fs=sp.getAttribute('data-fs'), fa=sp.getAttribute('data-fa');
+      var nf={campaign:(fc?decodeURIComponent(fc):''), adset:(fs!=null?decodeURIComponent(fs):null), ad:(fa!=null?decodeURIComponent(fa):null)};
+      var same=treeFilter && treeFilter.campaign===nf.campaign && treeFilter.adset===nf.adset && treeFilter.ad===nf.ad;
+      treeFilter = same ? null : nf;
+      applyChartFilter(); renderTree(rangeFor(period));
+      var cc=el('m-chartFilter'); if(cc&&cc.scrollIntoView){ cc.scrollIntoView({behavior:'smooth',block:'center'}); }
+    }); });
 }
 
 /* =================== INSIGHTS =================== */
@@ -642,8 +684,8 @@ function renderGeral(rng,prng){
 
 /* =================== ORQUESTRAÇÃO =================== */
 function renderMeta(rng,prng){
-  var a=aggMeta(rng), p=aggMeta(prng), days=metaDays(rng);
-  renderKpi(a,p); renderUpsell(a); renderPixel(a); renderFunnel(a,p); renderChartSales(days); renderChartRoas(days);
+  var a=aggMeta(rng), p=aggMeta(prng), days=filteredMetaDays(rng);
+  renderKpi(a,p); renderUpsell(a); renderPixel(a); renderFunnel(a,p); renderChartSales(days); renderChartRoas(days); renderChartFilter();
   renderInsights(rng); renderDaily(rng); renderTree(rng);
 }
 function renderAll(){ var rng=rangeFor(period), prng=prevRange(rng);
