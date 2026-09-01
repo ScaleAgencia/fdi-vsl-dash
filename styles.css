@@ -167,6 +167,7 @@ b{font-weight:700}
 .cac-pill{display:inline-block;padding:2px 9px;border-radius:999px;font-weight:800;font-size:11.5px;color:#fff}
 .cac-g{background:#1f9c5f}.cac-a{background:#b8901d}.cac-r{background:#c23b52}.cac-n{background:#22224a;color:var(--muted)}
 .vid-pill{display:inline-block;padding:2px 8px;border-radius:6px;font-weight:700;font-size:11.5px;color:var(--cy2);background:var(--cy-dim)}
+.conv-pill{display:inline-block;padding:2px 8px;border-radius:6px;font-weight:800;font-size:11.5px;color:var(--gold2);background:var(--gold-dim)}
 .pos{color:var(--good);font-weight:800}.neg{color:var(--bad);font-weight:800}
 .act{display:inline-block;padding:2px 9px;border-radius:999px;font-weight:800;font-size:10.5px;text-transform:uppercase;letter-spacing:.3px}
 .act-acel{background:rgba(47,224,127,.16);color:var(--good)}

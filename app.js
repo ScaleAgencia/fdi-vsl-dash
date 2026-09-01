@@ -266,6 +266,7 @@ function actTag(n,medRoas){
 function metricsCells(n,medRoas,medCac){ var roas=dv(n.rev,n.spend), cac=(n.sales>0&&n.spend>0)?dv(n.spend,n.sales):null, tag=actTag(n,medRoas);
   var cpm=n.impr>0?dv(n.spend,n.impr)*1000:null, ctr=n.impr>0?dv(n.clicks,n.impr)*100:null, cpc=n.clicks>0?dv(n.spend,n.clicks):null;
   var hook=n.impr>0?dv(n.v3,n.impr)*100:null, hold=n.v3>0?dv(n.v75,n.v3)*100:null;
+  var lpchk=n.lpv>0?dv(n.checkout,n.lpv)*100:null, chkc=n.checkout>0?dv(n.sales,n.checkout)*100:null, convt=n.lpv>0?dv(n.sales,n.lpv)*100:null;
   return '<td class="num">'+money0(n.spend)+'</td>'
     +'<td class="num">'+(cpm!=null?money(cpm):'—')+'</td>'
     +'<td class="num">'+(ctr!=null?pct(ctr):'—')+'</td>'
@@ -273,7 +274,10 @@ function metricsCells(n,medRoas,medCac){ var roas=dv(n.rev,n.spend), cac=(n.sale
     +'<td class="num">'+(hook!=null?'<span class="vid-pill">'+pct(hook)+'</span>':'—')+'</td>'
     +'<td class="num">'+(hold!=null?'<span class="vid-pill">'+pct(hold)+'</span>':'—')+'</td>'
     +'<td class="num">'+intf(n.checkout)+'</td>'
+    +'<td class="num">'+(lpchk!=null?pct(lpchk):'—')+'</td>'
+    +'<td class="num">'+(chkc!=null?pct(chkc):'—')+'</td>'
     +'<td class="num">'+intf(n.sales)+'</td>'
+    +'<td class="num">'+(convt!=null?'<span class="conv-pill">'+pct(convt)+'</span>':'—')+'</td>'
     +'<td class="num">'+(cac!=null?'<span class="cac-pill '+cacClass(cac,medCac)+'">'+money0(cac)+'</span>':'—')+'</td>'
     +'<td class="num">'+money0(n.rev)+'</td>'
     +'<td class="num">'+(n.spend>0?'<span class="roas-pill '+roasClass(roas)+'">'+roasf(roas)+'</span>':'—')+'</td>'
@@ -284,7 +288,7 @@ function treeRow(n,lvl,key,hasKids,medR,medC){
 }
 var treeSort={key:'rev',rev:false};
 var ACT_RANK={'Acelerar':0,'Manter':1,'Revisar':2,'Pausar':3,'s/ gasto':4,'Dado insuf.':5};
-var TREE_COLS=[{k:'name',l:'Campanha › Conjunto › Anúncio'},{k:'spend',l:'Gasto'},{k:'cpm',l:'CPM'},{k:'ctr',l:'CTR'},{k:'cpc',l:'CPC'},{k:'hook',l:'Hook'},{k:'hold',l:'Hold'},{k:'checkout',l:'Chk'},{k:'sales',l:'Vendas'},{k:'cac',l:'CPA'},{k:'rev',l:'Faturamento'},{k:'roas',l:'ROAS'},{k:'act',l:'Ação'}];
+var TREE_COLS=[{k:'name',l:'Campanha › Conjunto › Anúncio'},{k:'spend',l:'Gasto'},{k:'cpm',l:'CPM'},{k:'ctr',l:'CTR'},{k:'cpc',l:'CPC'},{k:'hook',l:'Hook'},{k:'hold',l:'Hold'},{k:'checkout',l:'Chk'},{k:'lpchk',l:'LP→Chk'},{k:'chkcompra',l:'Chk→Compra'},{k:'sales',l:'Vendas'},{k:'convtot',l:'Conv. total'},{k:'cac',l:'CPA'},{k:'rev',l:'Faturamento'},{k:'roas',l:'ROAS'},{k:'act',l:'Ação'}];
 function sortValOf(key,n,medR){
   if(key==='spend') return -(n.spend||0);
   if(key==='checkout') return -(n.checkout||0);
@@ -295,6 +299,9 @@ function sortValOf(key,n,medR){
   if(key==='cpc')   return n.clicks>0?dv(n.spend,n.clicks):Infinity;
   if(key==='hook')  return n.impr>0?-dv(n.v3,n.impr):Infinity;
   if(key==='hold')  return n.v3>0?-dv(n.v75,n.v3):Infinity;
+  if(key==='lpchk')     return n.lpv>0?-dv(n.checkout,n.lpv):Infinity;
+  if(key==='chkcompra') return n.checkout>0?-dv(n.sales,n.checkout):Infinity;
+  if(key==='convtot')   return n.lpv>0?-dv(n.sales,n.lpv):Infinity;
   if(key==='cac')   return (n.sales>0&&n.spend>0)?dv(n.spend,n.sales):Infinity;
   if(key==='roas')  return n.spend>0?-dv(n.rev,n.spend):Infinity;
   if(key==='act'){ var r=ACT_RANK[actTag(n,medR).t]; return r==null?9:r; }
@@ -324,9 +331,9 @@ function renderTree(rng){
   order.forEach(function(cK){ var c=camps[cK],cKey='c:'+cK,cHas=Object.keys(c.kids).length>0; out.push(treeRow(c,0,cKey,cHas,medR,medC));
     if(expanded[cKey]){ skeys(c.kids).forEach(function(sK){ var sN=c.kids[sK],sKey=cKey+'|s:'+sK,sHas=Object.keys(sN.kids).length>0; out.push(treeRow(sN,1,sKey,sHas,medR,medC));
       if(expanded[sKey]){ skeys(sN.kids).forEach(function(aK){ out.push(treeRow(sN.kids[aK],2,sKey+'|a:'+aK,false,medR,medC)); }); } }); } });
-  if(!out.length) out.push('<tr><td colspan="13" class="empty">Sem dados no período.</td></tr>');
+  if(!out.length) out.push('<tr><td colspan="16" class="empty">Sem dados no período.</td></tr>');
   var tEl=el('m-tree'); tEl.innerHTML=head+'<tbody>'+out.join('')+'</tbody>';
-  el('m-treeLegend').innerHTML='<span><span class="act act-acel">Acelerar</span> ROAS ≥ 1,2× a mediana</span><span><span class="act act-rev">Revisar</span> ROAS ≤ 0,6×</span><span><span class="act act-pause">Pausar</span> gastou e não vendeu</span><span style="color:var(--muted2)">Hook = % que assistiu 3s · Hold = % que reteve até 75% · clique num cabeçalho p/ ordenar</span>';
+  el('m-treeLegend').innerHTML='<span><span class="act act-acel">Acelerar</span> ROAS ≥ 1,2× a mediana</span><span><span class="act act-rev">Revisar</span> ROAS ≤ 0,6×</span><span><span class="act act-pause">Pausar</span> gastou e não vendeu</span><span style="color:var(--muted2)">Hook=3s/impr · Hold=75%/3s · <b>LP→Chk</b>=checkout/view LP · <b>Chk→Compra</b>=venda/checkout · <b>Conv. total</b>=venda/view LP · clique num cabeçalho p/ ordenar</span>';
   Array.prototype.forEach.call(tEl.querySelectorAll('th.sortable'),function(th){
     th.addEventListener('click',function(){ var k=th.getAttribute('data-col'); var s=treeSort;
       if(s.key===k){ s.rev=!s.rev; } else { s.key=k; s.rev=false; } renderTree(rangeFor(period)); }); });
@@ -565,6 +572,37 @@ function renderGoogle(rng,prng){
 }
 
 /* =================== GERAL (Meta + Google) =================== */
+function geralDays(rng){
+  var map={};
+  META.daily.forEach(function(d){ if(!inRange(d.date,rng))return; var o=map[d.date]||(map[d.date]={date:d.date,mS:0,gS:0,rev:0,sales:0}); o.mS+=d.spend||0; o.rev+=(d.rev||0)+(d.upRev||0); o.sales+=(d.sales||0); });
+  GOO.daily.forEach(function(d){ if(!inRange(d.date,rng))return; var o=map[d.date]||(map[d.date]={date:d.date,mS:0,gS:0,rev:0,sales:0}); o.gS+=d.spend||0; o.rev+=(d.rev||0); o.sales+=(d.sales||0); });
+  return Object.keys(map).map(function(k){ var o=map[k]; o.invest=o.mS+o.gS; return o; }).sort(function(a,b){return a.date.localeCompare(b.date);});
+}
+function renderGeChart(rng){
+  var days=geralDays(rng);
+  var W=1120,H=250,pl=44,pr=48,pt=14,pb=26,pw=W-pl-pr,ph=H-pt-pb,base=pt+ph;
+  var maxS=Math.max.apply(null,days.map(function(d){return d.invest||0;}).concat([1]));
+  var roas=days.map(function(d){return dv(d.rev,d.invest);});
+  var maxR=Math.max.apply(null,roas.concat([1]));
+  var n=days.length||1,gw=pw/n,bw=Math.max(2,Math.min(26,gw*0.55));
+  var s='<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMid meet">';
+  [0,0.5,1].forEach(function(f){ var y=pt+ph*(1-f); s+='<line x1="'+pl+'" y1="'+y+'" x2="'+(W-pr)+'" y2="'+y+'" stroke="#1a1a38" stroke-dasharray="2 3"/>';
+    s+='<text x="'+(pl-6)+'" y="'+(y+3)+'" text-anchor="end" fill="#8f89b8" font-size="10">'+money0(maxS*f)+'</text>';
+    s+='<text x="'+(W-pr+5)+'" y="'+(y+3)+'" text-anchor="start" fill="#b99a2e" font-size="10">'+nf1.format(maxR*f)+'</text>'; });
+  if(maxR>0){ var y1=base-ph*clamp(1/maxR); s+='<line x1="'+pl+'" y1="'+y1.toFixed(1)+'" x2="'+(W-pr)+'" y2="'+y1.toFixed(1)+'" stroke="rgba(47,224,127,.5)" stroke-dasharray="4 3"/>'; }
+  days.forEach(function(d,i){ var xc=pl+gw*i+gw/2, sh=ph*dv(d.invest,maxS); if(d.invest>0) s+='<rect x="'+(xc-bw/2).toFixed(1)+'" y="'+(base-sh).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+sh.toFixed(1)+'" rx="2" fill="rgba(139,92,246,.42)"/>'; });
+  var pts=[]; days.forEach(function(d,i){ if(d.invest>0){ var xc=pl+gw*i+gw/2, y=base-ph*clamp(roas[i]/maxR); pts.push([xc,y]); } });
+  if(pts.length>1){ s+='<path d="M'+pts.map(function(p){return p[0].toFixed(1)+' '+p[1].toFixed(1);}).join(' L')+'" fill="none" stroke="'+COL.gold+'" stroke-width="2.4"/>'; }
+  pts.forEach(function(p){ s+='<circle cx="'+p[0].toFixed(1)+'" cy="'+p[1].toFixed(1)+'" r="3" fill="'+COL.gold+'"/>'; });
+  xticks(days).forEach(function(i){ var xc=pl+gw*i+gw/2; s+='<text x="'+xc.toFixed(1)+'" y="'+(H-8)+'" text-anchor="middle" fill="#8f89b8" font-size="10">'+fmtBR(days[i].date)+'</text>'; });
+  s+=hitRects(days,pl,gw,pt,ph)+'</svg>';
+  el('ge-chart').innerHTML='<div class="chart">'+s+'</div><div class="chart-legend"><span><span class="dot" style="background:rgba(139,92,246,.6)"></span>Investimento (Meta+Google)</span><span><span class="ln" style="background:'+COL.gold+'"></span>ROAS</span><span style="color:var(--muted2)">tracejado = break-even (ROAS 1,00)</span></div>';
+  bindHits('ge-chart',days,function(d){ var rz=dv(d.rev,d.invest), luc=d.rev-d.invest; return '<div class="tt-d">'+fmtBR(d.date)+'</div>'
+    +'<div class="tt-r"><span style="color:'+COL.vio2+'">Investimento</span><b>'+money0(d.invest)+'</b></div>'
+    +'<div class="tt-r"><span style="color:var(--ink)">Vendas</span><b>'+intf(d.sales)+'</b></div>'
+    +'<div class="tt-r"><span style="color:'+COL.gold2+'">ROAS</span><b>'+roasf(rz)+'</b></div>'
+    +'<div class="tt-sub">Faturamento '+money0(d.rev)+' · Lucro <span class="'+(luc>=0?'pos':'neg')+'">'+money0(luc)+'</span></div>'; });
+}
 function renderGeral(rng,prng){
   var m=aggMeta(rng), g=aggGoo(rng);
   var mInvest=m.spend, gInvest=g.spend, invest=mInvest+gInvest;
@@ -589,10 +627,8 @@ function renderGeral(rng,prng){
   var totRow='<tr><td>Total</td><td class="num">'+money0(invest)+'</td><td class="num">'+intf(salesFe)+'</td><td class="num">'+money0(fatTot)+'</td><td class="num">'+(invest>0?roasf(roas):'—')+'</td><td class="num">100%</td></tr>';
   el('ge-cmp').innerHTML='<thead><tr><th>Origem</th><th>Investimento</th><th>Vendas</th><th>Faturamento</th><th>ROAS</th><th>% inv.</th></tr></thead><tbody>'
     +row('Meta Ads (c/ imposto)',COL.vio,mInvest,mSales,mRevAll)+row('Google / YouTube',COL.cy,gInvest,gSales,gRev)+'</tbody><tfoot>'+totRow+'</tfoot>';
-  var map={};
-  META.daily.forEach(function(d){ if(!inRange(d.date,rng))return; var o=map[d.date]||(map[d.date]={date:d.date,mS:0,gS:0,rev:0,sales:0}); o.mS+=d.spend||0; o.rev+=(d.rev||0)+(d.upRev||0); o.sales+=(d.sales||0); });
-  GOO.daily.forEach(function(d){ if(!inRange(d.date,rng))return; var o=map[d.date]||(map[d.date]={date:d.date,mS:0,gS:0,rev:0,sales:0}); o.gS+=d.spend||0; o.rev+=(d.rev||0); o.sales+=(d.sales||0); });
-  var rows=Object.keys(map).map(function(k){return map[k];}).sort(function(a,b){return b.date.localeCompare(a.date);});
+  renderGeChart(rng);
+  var rows=geralDays(rng).slice().sort(function(a,b){return b.date.localeCompare(a.date);});
   var head='<thead><tr><th>Dia</th><th>Inv. Meta</th><th>Inv. Google</th><th>Inv. Total</th><th>Vendas</th><th>Faturamento</th><th>ROAS</th><th>Lucro</th></tr></thead>';
   var body=rows.map(function(r){ var inv=r.mS+r.gS, rz=dv(r.rev,inv), luc=r.rev-inv;
     return '<tr><td>'+fmtBR(r.date)+'</td><td class="num">'+money0(r.mS)+'</td><td class="num">'+money0(r.gS)+'</td><td class="num">'+money0(inv)+'</td>'
