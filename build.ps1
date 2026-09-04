@@ -27,6 +27,9 @@ $CAMP_FRAG = 'fdi-vsl'        # funil VSL = utm_campaign contem "fdi-vsl"
 $UPSELL_FRAG = 'prosperus'    # produto de UPSELL do funil (Prosperus e variantes). Mesma utm do VSL, separado do front-end.
 $FE_LABEL = 'Formula dos Investimentos'   # front-end (rotulo)
 $UP_LABEL = 'Prosperus'                   # upsell (rotulo)
+# Override pontual de gasto Meta por DATA (valor GERENCIADOR, sem imposto). O usuario informou o gasto real do dia;
+# o grain do dia e escalado proporcional p/ bater. Demais dias = dado real das queries. Chave = yyyy-MM-dd.
+$SPEND_OVERRIDE = @{ '2026-09-03' = 637.09 }
 $SENT = 'SEM_RASTREIO'
 $US = [char]31   # separador de chave (Unit Separator). NAO usar backtick-u em string: quebra o parser no pwsh7 (vira escape Unicode)
 
@@ -194,6 +197,15 @@ foreach($r in $md){ if($r.Count -le $Q_AD){continue}
   $cn=Norm $r[$Q_CAMP]; $sn=Norm $r[$Q_SET]; $an=Norm $r[$Q_AD]
   $o=_gd $d; $o.spendRaw+=$spRaw;$o.spend+=$sp;$o.impr+=$im;$o.reach+=$rc;$o.clicks+=$ck;$o.lpv+=$lp;$o.v3+=$v3;$o.v75+=$v75;$o.checkout+=$chk;$o.mpur+=$mp;$o.mrev+=$mv
   $g=_gg ($d+$US+$cn+$US+$sn+$US+$an) $d $cn $sn $an; $g.spendRaw+=$spRaw;$g.spend+=$sp;$g.impr+=$im;$g.reach+=$rc;$g.clicks+=$ck;$g.lpv+=$lp;$g.v3+=$v3;$g.v75+=$v75;$g.checkout+=$chk;$g.mpur+=$mp;$g.mrev+=$mv
+}
+# ---- Override pontual de gasto Meta (trava por data; escala o grain do dia p/ bater) ----
+foreach($od in @($SPEND_OVERRIDE.Keys)){
+  $ov=[double]$SPEND_OVERRIDE[$od]; $qDaysSet[$od]=$true
+  $o=_gd $od; $actual=[double]$o.spendRaw
+  if($actual -gt 0){ $factor=$ov/$actual
+    foreach($g in $grain.Values){ if($g.date -eq $od){ $g.spendRaw=[math]::Round($g.spendRaw*$factor,4); $g.spend=$g.spendRaw*$TAX } } }
+  $o.spendRaw=$ov; $o.spend=$ov*$TAX
+  Write-Host ("Override gasto Meta {0}: real={1} -> {2} (gerenciador)" -f $od,([math]::Round($actual,2)),$ov)
 }
 $qDays=@($qDaysSet.Keys | Sort-Object)
 $qMin= if($qDays.Count){ $qDays[0] } else { '' }
