@@ -45,6 +45,7 @@
     <button class="tab" data-tab="meta"><span class="tdot" style="background:#8b5cf6"></span>Meta Ads · Funil VSL</button>
     <button class="tab" data-tab="google"><span class="tdot" style="background:#34d7e6"></span>Google · Funil</button>
     <button class="tab" data-tab="vendas"><span class="tdot" style="background:#f6c445"></span>Vendas</button>
+    <button class="tab" data-tab="v2"><span class="tdot" style="background:#34d7e6"></span>⚡ Otimização V2</button>
   </nav>
 
   <!-- ============ VISÃO GERAL (Meta + Google) ============ -->
@@ -176,6 +177,28 @@
     <div class="card">
       <div class="card-h">Visão diária — todas as vendas <span class="hint">mais recente no topo</span></div>
       <div class="table-scroll"><table class="tbl" id="v-daily"></table></div>
+    </div>
+  </section>
+
+  <!-- ============ OTIMIZAÇÃO V2 (100% filtrável) ============ -->
+  <section class="panel-tab hidden" id="tab-v2">
+    <div id="v2Wrap">
+      <div class="v2bar">
+        <div class="v2filters" id="v2Filters"></div>
+        <div class="v2crumbwrap"><span class="v2crumb-lab">Filtro ativo:</span> <span id="v2Crumb"></span></div>
+      </div>
+      <div class="funil-grid">
+        <div class="kpi-col" id="v2Kpi"></div>
+        <div class="chart-col">
+          <div class="card"><div class="card-h">Combinação diária <span class="hint">barras = investimento (violeta) + faturamento (verde) · linha dourada = ROAS · reage 100% ao item filtrado · exclui hoje (parcial)</span></div><div id="v2Daily"></div></div>
+        </div>
+      </div>
+      <div id="v2TCamp"></div>
+      <div class="card"><div class="card-h">Evolução diária · por campanha <span class="hint">métrica no seletor <b>Linhas</b> acima (ROAS · Vendas · Faturamento) · top 8 por gasto · clique na legenda p/ filtrar · hover mostra as métricas do dia · exclui hoje (parcial)</span></div><div id="v2LinesCamp"></div></div>
+      <div id="v2TAdset"></div>
+      <div class="card"><div class="card-h">Evolução diária · por conjunto/grupo <span class="hint">métrica no seletor <b>Linhas</b> acima · top 8 por gasto · clique na legenda p/ filtrar · hover mostra as métricas do dia</span></div><div id="v2LinesAdset"></div></div>
+      <div id="v2TAd"></div>
+      <div class="card"><div class="card-h">Evolução diária · por anúncio <span class="hint">métrica no seletor <b>Linhas</b> acima · top 8 por gasto · clique na legenda p/ filtrar · hover mostra as métricas do dia</span></div><div id="v2LinesAd"></div></div>
     </div>
   </section>
 
