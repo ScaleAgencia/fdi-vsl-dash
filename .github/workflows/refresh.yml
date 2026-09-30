@@ -12,7 +12,7 @@ permissions:
 
 concurrency:
   group: fdi-vsl-pages
-  cancel-in-progress: false
+  cancel-in-progress: true   # auto-destrava: se um run ficar preso em queued, o proximo dispatch cancela e segue (build idempotente, ~3min << intervalo)
 
 jobs:
   build:
