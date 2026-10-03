@@ -221,29 +221,68 @@ function renderChartRoas(days){
 
 /* =================== DAILY TABLE (meta) =================== */
 function heatBg(rgb,frac){ return 'background:rgba('+rgb+','+(0.10+0.42*clamp(frac)).toFixed(3)+')'; }
+/* ---- Visão Diária PADRÃO (ordem única em todas as abas) ----
+   Dia · Investimento · Faturamento · ROAS · ROAS c/ upsell · Vendas · CAC · CPM · CTR · Connect · Conv.Pág · TX CHK · TX Compra · Lucro
+   Cada objeto-dia carrega os componentes brutos; as taxas de funil (Connect/Conv.Pág/TX CHK/TX Compra)
+   usam fLpv/fChk/fSales/fClicks — no Meta = o próprio funil; no Google caem p/ clique (sem LP);
+   no Geral/Vendas = componentes do Meta (as etapas de página só existem no Meta). */
+function dMet(o){
+  var spend=o.spend||0, fatOB=(o.rev||0)+(o.upRev||0);
+  return { date:o.date, spend:spend, rev:o.rev||0, sales:o.sales||0,
+    roas: spend>0 ? (o.rev||0)/spend : null,
+    roasOB: spend>0 ? fatOB/spend : null,
+    cac: (o.sales>0) ? spend/o.sales : null,
+    cpm: (o.impr>0) ? spend/o.impr*1000 : null,
+    ctr: (o.impr>0) ? (o.clicks||0)/o.impr*100 : null,
+    connect: (o.fLpv>0 && o.fClicks>0) ? o.fLpv/o.fClicks*100 : null,
+    convpag: (o.fLpv>0) ? (o.fSales||0)/o.fLpv*100 : ((o.fClicks>0) ? (o.fSales||0)/o.fClicks*100 : null),
+    txchk: (o.fLpv>0) ? (o.fChk||0)/o.fLpv*100 : null,
+    txcompra: (o.fChk>0) ? (o.fSales||0)/o.fChk*100 : null,
+    lucro: fatOB - spend }; }
+function dailyStdTable(rows){
+  var maxS=Math.max.apply(null,rows.map(function(o){return o.spend||0;}).concat([1]));
+  var mets=rows.map(dMet);
+  var medC=median(mets.map(function(m){return m.cac;}).filter(function(x){return x!=null;}));
+  var order=mets.map(function(m,i){return i;}).sort(function(a,b){return mets[b].date.localeCompare(mets[a].date);});
+  function rp(v){ return v!=null?'<span class="roas-pill '+roasClass(v)+'">'+roasf(v)+'</span>':'—'; }
+  function cp(v){ return v!=null?'<span class="cac-pill '+cacClass(v,medC)+'">'+money0(v)+'</span>':'—'; }
+  function pc(v){ return v!=null?pct(v):'—'; }
+  var head='<thead><tr><th>Dia</th><th>Investimento</th><th>Faturamento</th><th>ROAS</th><th>ROAS c/ upsell</th><th>Vendas</th><th>CAC</th><th>CPM</th><th>CTR</th><th>Connect</th><th>Conv. Pág</th><th>TX CHK</th><th>TX Compra</th><th>Lucro</th></tr></thead>';
+  var body=order.map(function(i){ var m=mets[i], o=rows[i];
+    return '<tr><td>'+fmtBR(m.date)+'</td>'
+      +'<td class="num"><span class="heatcell" style="'+heatBg('167,139,250',(o.spend||0)/maxS)+'">'+money0(m.spend)+'</span></td>'
+      +'<td class="num">'+money0(m.rev)+'</td>'
+      +'<td class="num">'+rp(m.roas)+'</td>'
+      +'<td class="num">'+rp(m.roasOB)+'</td>'
+      +'<td class="num">'+intf(m.sales)+'</td>'
+      +'<td class="num">'+cp(m.cac)+'</td>'
+      +'<td class="num">'+(m.cpm!=null?money(m.cpm):'—')+'</td>'
+      +'<td class="num">'+pc(m.ctr)+'</td>'
+      +'<td class="num">'+pc(m.connect)+'</td>'
+      +'<td class="num">'+(m.convpag!=null?'<span class="conv-pill">'+pct(m.convpag)+'</span>':'—')+'</td>'
+      +'<td class="num">'+pc(m.txchk)+'</td>'
+      +'<td class="num">'+pc(m.txcompra)+'</td>'
+      +'<td class="num '+(m.lucro>=0?'pos':'neg')+'">'+money0(m.lucro)+'</td></tr>'; }).join('');
+  if(!rows.length) body='<tr><td colspan="14" class="empty">Sem dados no período.</td></tr>';
+  var tot={date:'',spend:0,impr:0,clicks:0,sales:0,rev:0,upRev:0,fLpv:0,fChk:0,fSales:0,fClicks:0};
+  rows.forEach(function(o){ tot.spend+=o.spend||0;tot.impr+=o.impr||0;tot.clicks+=o.clicks||0;tot.sales+=o.sales||0;tot.rev+=o.rev||0;tot.upRev+=o.upRev||0;tot.fLpv+=o.fLpv||0;tot.fChk+=o.fChk||0;tot.fSales+=o.fSales||0;tot.fClicks+=o.fClicks||0; });
+  var t=dMet(tot);
+  var foot='<tfoot><tr><td>Total</td><td class="num">'+money0(t.spend)+'</td><td class="num">'+money0(t.rev)+'</td><td class="num">'+(t.roas!=null?roasf(t.roas):'—')+'</td><td class="num">'+(t.roasOB!=null?roasf(t.roasOB):'—')+'</td><td class="num">'+intf(t.sales)+'</td><td class="num">'+(t.cac!=null?money0(t.cac):'—')+'</td><td class="num">'+(t.cpm!=null?money(t.cpm):'—')+'</td><td class="num">'+pc(t.ctr)+'</td><td class="num">'+pc(t.connect)+'</td><td class="num">'+pc(t.convpag)+'</td><td class="num">'+pc(t.txchk)+'</td><td class="num">'+pc(t.txcompra)+'</td><td class="num '+(t.lucro>=0?'pos':'neg')+'">'+money0(t.lucro)+'</td></tr></tfoot>';
+  return head+'<tbody>'+body+'</tbody>'+foot;
+}
+// combinado Meta+Google por dia (Geral/Vendas); taxas de funil = componentes Meta
+function combinedDaily(rng){
+  var m={}; function ens(d){ return m[d]||(m[d]={date:d,spend:0,impr:0,clicks:0,sales:0,rev:0,upRev:0,fLpv:0,fChk:0,fSales:0,fClicks:0}); }
+  META.daily.forEach(function(d){ if(!isDate(d.date)||!inRange(d.date,rng))return; var o=ens(d.date);
+    o.spend+=d.spend||0;o.impr+=d.impr||0;o.clicks+=d.clicks||0;o.sales+=d.sales||0;o.rev+=d.rev||0;o.upRev+=d.upRev||0;
+    o.fLpv+=d.lpv||0;o.fChk+=d.checkout||0;o.fSales+=d.sales||0;o.fClicks+=d.clicks||0; });
+  GOO.daily.forEach(function(d){ if(!isDate(d.date)||!inRange(d.date,rng))return; var o=ens(d.date);
+    o.spend+=d.spend||0;o.impr+=d.impr||0;o.clicks+=d.clicks||0;o.sales+=d.sales||0;o.rev+=d.rev||0; });
+  return Object.keys(m).map(function(k){return m[k];});
+}
 function renderDaily(rng){
-  var rows=metaDays(rng).slice().sort(function(a,b){return b.date.localeCompare(a.date);});
-  var maxS=Math.max.apply(null,rows.map(function(r){return r.spend||0;}).concat([1]));
-  var medCac=median(rows.map(function(r){return r.sales>0?dv(r.spend,r.sales):null;}));
-  var head='<thead><tr><th>Dia</th><th>Investimento</th><th>Impr.</th><th>Vídeo 3s</th><th>Cliques</th><th>LPV</th><th>Vendas</th><th>Upsell</th><th>CPA</th><th>Faturamento</th><th>Fat. Total</th><th>ROAS</th><th>Lucro</th></tr></thead>';
-  var body=rows.map(function(r){ var fatT=r.rev+(r.upRev||0), roas=dv(r.rev,r.spend), cac=r.sales>0?dv(r.spend,r.sales):null, lucro=fatT-r.spend;
-    return '<tr><td>'+fmtBR(r.date)+'</td>'
-      +'<td class="num"><span class="heatcell" style="'+heatBg('167,139,250',r.spend/maxS)+'">'+money0(r.spend)+'</span></td>'
-      +'<td class="num">'+intf(r.impr)+'</td>'
-      +'<td class="num">'+intf(r.v3)+'</td>'
-      +'<td class="num">'+intf(r.clicks)+'</td>'
-      +'<td class="num">'+intf(r.lpv)+'</td>'
-      +'<td class="num">'+intf(r.sales)+'</td>'
-      +'<td class="num">'+((r.upSales||0)>0?'<span class="vid-pill" style="color:var(--gold2);background:var(--gold-dim)">'+intf(r.upSales)+'</span>':'—')+'</td>'
-      +'<td class="num">'+(cac!=null?'<span class="cac-pill '+cacClass(cac,medCac)+'">'+money0(cac)+'</span>':'—')+'</td>'
-      +'<td class="num">'+money0(r.rev)+'</td>'
-      +'<td class="num">'+money0(fatT)+'</td>'
-      +'<td class="num">'+(r.spend>0?'<span class="roas-pill '+roasClass(roas)+'">'+roasf(roas)+'</span>':'—')+'</td>'
-      +'<td class="num '+(lucro>=0?'pos':'neg')+'">'+money0(lucro)+'</td></tr>'; }).join('');
-  if(!rows.length) body='<tr><td colspan="13" class="empty">Sem dados no período.</td></tr>';
-  var a=aggMeta(rng), fatTa=a.rev+(a.upRev||0), tr=dv(a.rev,a.spend), tl=fatTa-a.spend, tc=a.sales>0?dv(a.spend,a.sales):null;
-  var foot='<tfoot><tr><td>Total</td><td class="num">'+money0(a.spend)+'</td><td class="num">'+intf(a.impr)+'</td><td class="num">'+intf(a.v3)+'</td><td class="num">'+intf(a.clicks)+'</td><td class="num">'+intf(a.lpv)+'</td><td class="num">'+intf(a.sales)+'</td><td class="num">'+((a.upSales||0)>0?intf(a.upSales):'—')+'</td><td class="num">'+(tc!=null?money0(tc):'—')+'</td><td class="num">'+money0(a.rev)+'</td><td class="num">'+money0(fatTa)+'</td><td class="num">'+(a.spend>0?roasf(tr):'—')+'</td><td class="num '+(tl>=0?'pos':'neg')+'">'+money0(tl)+'</td></tr></tfoot>';
-  el('m-daily').innerHTML=head+'<tbody>'+body+'</tbody>'+foot;
+  var rows=metaDays(rng).map(function(r){ return {date:r.date,spend:r.spend,impr:r.impr,clicks:r.clicks,sales:r.sales,rev:r.rev,upRev:r.upRev||0,fLpv:r.lpv,fChk:r.checkout,fSales:r.sales,fClicks:r.clicks}; });
+  el('m-daily').innerHTML=dailyStdTable(rows);
 }
 
 /* =================== FILTRO por campanha/conjunto/anúncio (gráficos Meta) =================== */
@@ -456,15 +495,7 @@ function renderVendas(rng){
   el('v-cmp').innerHTML='<thead><tr><th>Produto</th><th>Vendas</th><th>Faturamento</th><th>Ticket</th><th>% fat.</th></tr></thead><tbody>'
     +row('Front-end · '+esc(PRODUTO),COL.vio,a.feS,a.feR)+row('Upsell · '+esc(UPPROD),COL.gold,a.upS,a.upR)+'</tbody><tfoot>'+totRow+'</tfoot>';
   renderVChart(rng);
-  var rows=VEN.daily.filter(function(d){return isDate(d.date)&&inRange(d.date,rng);}).slice().sort(function(a,b){return b.date.localeCompare(a.date);});
-  var head='<thead><tr><th>Dia</th><th>Front-end</th><th>Fat. Front-end</th><th>Upsell</th><th>Fat. Upsell</th><th>Total</th><th>Fat. Total</th></tr></thead>';
-  var body=rows.map(function(r){ var ts=(r.feS||0)+(r.upS||0), trv=(r.feR||0)+(r.upR||0);
-    return '<tr><td>'+fmtBR(r.date)+'</td><td class="num">'+intf(r.feS)+'</td><td class="num">'+money0(r.feR)+'</td>'
-      +'<td class="num">'+((r.upS||0)>0?'<span style="color:var(--gold2);font-weight:700">'+intf(r.upS)+'</span>':'—')+'</td><td class="num">'+money0(r.upR)+'</td>'
-      +'<td class="num">'+intf(ts)+'</td><td class="num">'+money0(trv)+'</td></tr>'; }).join('');
-  if(!rows.length)body='<tr><td colspan="7" class="empty">Sem dados no período.</td></tr>';
-  var foot='<tfoot><tr><td>Total</td><td class="num">'+intf(a.feS)+'</td><td class="num">'+money0(a.feR)+'</td><td class="num">'+intf(a.upS)+'</td><td class="num">'+money0(a.upR)+'</td><td class="num">'+intf(sales)+'</td><td class="num">'+money0(rev)+'</td></tr></tfoot>';
-  el('v-daily').innerHTML=head+'<tbody>'+body+'</tbody>'+foot;
+  el('v-daily').innerHTML=dailyStdTable(combinedDaily(rng));
   function ranking(list,total){ var totR=0; list.forEach(function(x){totR+=x.r;}); if(totR<=0)totR=1;
     var head='<thead><tr><th>'+(total?'Anúncio':'Campanha')+'</th><th>Vendas</th><th>Faturamento</th><th>Ticket</th><th>%</th></tr></thead>';
     var body=list.slice(0,15).map(function(x){ var nm=x.n==='SEM_RASTREIO'?'— sem rastreio —':x.n;
@@ -520,20 +551,8 @@ function renderGFunnel(a,p){
   html+='</div>'; el('g-funnel').innerHTML=html;
 }
 function renderGDaily(rng){
-  var rows=gooDays(rng).slice().sort(function(a,b){return b.date.localeCompare(a.date);});
-  var maxS=Math.max.apply(null,rows.map(function(r){return r.spend||0;}).concat([0.01]));
-  var head='<thead><tr><th>Dia</th><th>Investimento</th><th>Impr.</th><th>Cliques</th><th>CPC</th><th>CTR</th><th>Vendas</th><th>Faturamento</th><th>ROAS</th></tr></thead>';
-  var body=rows.map(function(r){ var cpc=dv(r.spend,r.clicks), ctr=dv(r.clicks,r.impr)*100, roas=dv(r.rev,r.spend);
-    return '<tr><td>'+fmtBR(r.date)+'</td>'
-      +'<td class="num"><span class="heatcell" style="'+heatBg('52,215,230',r.spend/maxS)+'">'+money(r.spend)+'</span></td>'
-      +'<td class="num">'+intf(r.impr)+'</td><td class="num">'+intf(r.clicks)+'</td>'
-      +'<td class="num">'+(r.clicks?money(cpc):'—')+'</td><td class="num">'+(r.impr?pct(ctr):'—')+'</td>'
-      +'<td class="num">'+intf(r.sales)+'</td><td class="num">'+money0(r.rev)+'</td>'
-      +'<td class="num">'+((r.spend>0&&r.sales>0)?'<span class="roas-pill '+roasClass(roas)+'">'+roasf(roas)+'</span>':'—')+'</td></tr>'; }).join('');
-  if(!rows.length) body='<tr><td colspan="9" class="empty">Sem dados no período.</td></tr>';
-  var a=aggGoo(rng), tcpc=dv(a.spend,a.clicks), tctr=dv(a.clicks,a.impr)*100, troas=dv(a.rev,a.spend);
-  var foot='<tfoot><tr><td>Total</td><td class="num">'+money(a.spend)+'</td><td class="num">'+intf(a.impr)+'</td><td class="num">'+intf(a.clicks)+'</td><td class="num">'+(a.clicks?money(tcpc):'—')+'</td><td class="num">'+(a.impr?pct(tctr):'—')+'</td><td class="num">'+intf(a.sales)+'</td><td class="num">'+money0(a.rev)+'</td><td class="num">'+((a.spend>0&&a.sales>0)?roasf(troas):'—')+'</td></tr></tfoot>';
-  el('g-daily').innerHTML=head+'<tbody>'+body+'</tbody>'+foot;
+  var rows=gooDays(rng).map(function(r){ return {date:r.date,spend:r.spend,impr:r.impr,clicks:r.clicks,sales:r.sales,rev:r.rev,upRev:0,fLpv:0,fChk:0,fSales:r.sales,fClicks:r.clicks}; });
+  el('g-daily').innerHTML=dailyStdTable(rows);
 }
 /* árvore Google (sortable) */
 function gNewNode(name,full){ return {name:name,full:full,spend:0,impr:0,clicks:0,sales:0,rev:0,kids:{}}; }
@@ -672,16 +691,7 @@ function renderGeral(rng,prng){
   el('ge-cmp').innerHTML='<thead><tr><th>Origem</th><th>Investimento</th><th>Vendas</th><th>Faturamento</th><th>ROAS</th><th>% inv.</th></tr></thead><tbody>'
     +row('Meta Ads (c/ imposto)',COL.vio,mInvest,mSales,mRevAll)+row('Google / YouTube',COL.cy,gInvest,gSales,gRev)+'</tbody><tfoot>'+totRow+'</tfoot>';
   renderGeChart(rng);
-  var rows=geralDays(rng).slice().sort(function(a,b){return b.date.localeCompare(a.date);});
-  var head='<thead><tr><th>Dia</th><th>Inv. Meta</th><th>Inv. Google</th><th>Inv. Total</th><th>Vendas</th><th>Faturamento</th><th>ROAS</th><th>Lucro</th></tr></thead>';
-  var body=rows.map(function(r){ var inv=r.mS+r.gS, rz=dv(r.rev,inv), luc=r.rev-inv;
-    return '<tr><td>'+fmtBR(r.date)+'</td><td class="num">'+money0(r.mS)+'</td><td class="num">'+money0(r.gS)+'</td><td class="num">'+money0(inv)+'</td>'
-      +'<td class="num">'+intf(r.sales)+'</td><td class="num">'+money0(r.rev)+'</td>'
-      +'<td class="num">'+(inv>0?'<span class="roas-pill '+roasClass(rz)+'">'+roasf(rz)+'</span>':'—')+'</td>'
-      +'<td class="num '+(luc>=0?'pos':'neg')+'">'+money0(luc)+'</td></tr>'; }).join('');
-  if(!rows.length) body='<tr><td colspan="8" class="empty">Sem dados no período.</td></tr>';
-  var foot='<tfoot><tr><td>Total</td><td class="num">'+money0(mInvest)+'</td><td class="num">'+money0(gInvest)+'</td><td class="num">'+money0(invest)+'</td><td class="num">'+intf(salesFe)+'</td><td class="num">'+money0(fatTot)+'</td><td class="num">'+(invest>0?roasf(roas):'—')+'</td><td class="num '+(lucro>=0?'pos':'neg')+'">'+money0(lucro)+'</td></tr></tfoot>';
-  el('ge-daily').innerHTML=head+'<tbody>'+body+'</tbody>'+foot;
+  el('ge-daily').innerHTML=dailyStdTable(combinedDaily(rng));
 }
 
 /* =================== OTIMIZAÇÃO V2 (100% filtrável) ===================
