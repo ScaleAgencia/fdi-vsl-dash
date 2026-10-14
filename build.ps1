@@ -129,7 +129,7 @@ foreach($r in $vd){
   $rev = MoneyBR $r[$V_FAT]
   $prod = Norm $r[$V_PROD]; $prodD = Deaccent $prod
   $srcD = Deaccent (Cell $r $V_SRC)
-  $isUp = ($prodD -like ("*"+$UPSELL_FRAG+"*"))                   # upsell = produto Prosperus
+  $isUp = ($prodD -like '*prosperus*' -or $prodD -like '*lastro*')   # upsell = Prosperus OU Lastro
   $isFdiFam = ($prodD -like '*formula dos investimentos*' -or $isUp)
   # Google: venda google-ads de produto FDI -> cruza depois com as campanhas das queries Google
   if($srcD -eq 'google-ads' -and $isFdiFam){
@@ -179,7 +179,7 @@ foreach($r in $md){ if($r.Count -le $Q_AD){continue}
 
 $daily=@{}; $grain=@{}
 function _gd($d){ if(-not $daily.ContainsKey($d)){ $daily[$d]=[pscustomobject]@{date=$d;spendRaw=0.0;spend=0.0;impr=0;reach=0;clicks=0;lpv=0;v3=0;v75=0;checkout=0;mpur=0;mrev=0.0;sales=0;rev=0.0;upSales=0;upRev=0.0} }; return $daily[$d] }
-function _gg($k,$d,$c,$s,$a){ if(-not $grain.ContainsKey($k)){ $grain[$k]=[pscustomobject]@{date=$d;campaign=$c;adset=$s;ad=$a;spendRaw=0.0;spend=0.0;impr=0;reach=0;clicks=0;lpv=0;v3=0;v75=0;checkout=0;mpur=0;mrev=0.0;sales=0;rev=0.0} }; return $grain[$k] }
+function _gg($k,$d,$c,$s,$a){ if(-not $grain.ContainsKey($k)){ $grain[$k]=[pscustomobject]@{date=$d;campaign=$c;adset=$s;ad=$a;spendRaw=0.0;spend=0.0;impr=0;reach=0;clicks=0;lpv=0;v3=0;v75=0;checkout=0;mpur=0;mrev=0.0;sales=0;rev=0.0;upSales=0;upRev=0.0} }; return $grain[$k] }
 
 foreach($r in $md){ if($r.Count -le $Q_AD){continue}
   $d=QDay $r[$Q_DAY]; if($d -notmatch '^\d{4}-\d{2}-\d{2}$'){continue}
@@ -218,31 +218,27 @@ function MatchName($val,$deMap){ $vd=Deaccent $val; if($vd -eq ''){return ''}; i
 $attr=0; $inWin=0; $upWin=0; $upRevWin=0.0
 foreach($s in $vslSales){
   if($qMin -eq '' -or $s.date -lt $qMin -or $s.date -gt $qMax){ continue }   # cruza SO a janela das queries
-  if($s.up){                                                                # UPSELL: nao entra no funil front-end; incremental
-    $upWin++; $upRevWin+=$s.rev
-    $ou=_gd $s.date; $ou.upSales++; $ou.upRev+=$s.rev
-    continue
-  }
-  $inWin++
-  $o=_gd $s.date; $o.sales++; $o.rev+=$s.rev
+  # resolve campanha/conjunto/anuncio (mesma logica p/ front-end E upsell -> ROAS c/ upsell por criativo)
   $cName=MatchName $s.camp $campDe
   if($cName -ne ''){
     $sName=MatchName $s.adset $setDe
     $aName=MatchName $s.ad $adDe
     if($sName -eq '' -or -not $qPair.ContainsKey(($cName+$US+$sName))){ $sName=$SENT; $aName=$SENT }
     elseif($aName -eq '' -or -not $qTriple.ContainsKey(($cName+$US+$sName+$US+$aName))){ $aName=$SENT }
-    $attr++
+    if(-not $s.up){ $attr++ }
   } else {
     $adk=Deaccent $s.ad; $setk=Deaccent $s.adset
-    if($adk -ne '' -and $adToTriple.ContainsKey($adk)){ $t=$adToTriple[$adk]; $cName=$t.camp; $sName=$t.set; $aName=$t.ad; $attr++ }
-    elseif($setk -ne '' -and $setToPair.ContainsKey($setk)){ $t=$setToPair[$setk]; $cName=$t.camp; $sName=$t.set; $aName=$SENT; $attr++ }
+    if($adk -ne '' -and $adToTriple.ContainsKey($adk)){ $t=$adToTriple[$adk]; $cName=$t.camp; $sName=$t.set; $aName=$t.ad; if(-not $s.up){ $attr++ } }
+    elseif($setk -ne '' -and $setToPair.ContainsKey($setk)){ $t=$setToPair[$setk]; $cName=$t.camp; $sName=$t.set; $aName=$SENT; if(-not $s.up){ $attr++ } }
     else { $cName=$SENT; $sName=$SENT; $aName=$SENT }
   }
-  $g=_gg ($s.date+$US+$cName+$US+$sName+$US+$aName) $s.date $cName $sName $aName; $g.sales++; $g.rev+=$s.rev
+  $o=_gd $s.date; $g=_gg ($s.date+$US+$cName+$US+$sName+$US+$aName) $s.date $cName $sName $aName
+  if($s.up){ $upWin++; $upRevWin+=$s.rev; $o.upSales++; $o.upRev+=$s.rev; $g.upSales++; $g.upRev+=$s.rev }
+  else     { $inWin++; $o.sales++; $o.rev+=$s.rev; $g.sales++; $g.rev+=$s.rev }
 }
 
 $dailyArr=@($daily.Values | Sort-Object date)
-$grainArr=@($grain.Values | Where-Object { $_.spend -gt 0 -or $_.sales -gt 0 })
+$grainArr=@($grain.Values | Where-Object { $_.spend -gt 0 -or $_.sales -gt 0 -or $_.upSales -gt 0 })
 function _sum($arr,$p){ $x=($arr|Measure-Object $p -Sum).Sum; if($null -eq $x){return 0}; return $x }
 $tot=[pscustomobject]@{
   spendRaw=(_sum $dailyArr 'spendRaw'); spend=(_sum $dailyArr 'spend'); impr=(_sum $dailyArr 'impr'); reach=(_sum $dailyArr 'reach'); clicks=(_sum $dailyArr 'clicks')
@@ -257,7 +253,7 @@ $gOut=@()
 foreach($g in $grainArr){
   $gOut += [pscustomobject]@{ d=$g.date; c=(_ni $g.campaign); s=(_ni $g.adset); a=(_ni $g.ad)
     sp=[math]::Round($g.spend,2); spr=[math]::Round($g.spendRaw,2); im=[int]$g.impr; rh=[int]$g.reach; ck=[int]$g.clicks; lp=[int]$g.lpv
-    v3=[int]$g.v3; v75=[int]$g.v75; chk=[int]$g.checkout; mp=[int]$g.mpur; mv=[math]::Round($g.mrev,2); vn=[int]$g.sales; rv=[math]::Round($g.rev,2) }
+    v3=[int]$g.v3; v75=[int]$g.v75; chk=[int]$g.checkout; mp=[int]$g.mpur; mv=[math]::Round($g.mrev,2); vn=[int]$g.sales; rv=[math]::Round($g.rev,2); un=[int]$g.upSales; uv=[math]::Round($g.upRev,2) }
 }
 $dOut=@()
 foreach($o in $dailyArr){

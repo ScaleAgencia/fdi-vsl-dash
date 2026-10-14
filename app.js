@@ -27,7 +27,7 @@ function prepMeta(S){
   S._grain = arr(S.grain).map(function(g){
     return { date:g.d, campaign:names[g.c]||'', adset:names[g.s]||'', ad:names[g.a]||'',
       spend:+g.sp||0, spendRaw:+g.spr||0, impr:+g.im||0, reach:+g.rh||0, clicks:+g.ck||0, lpv:+g.lp||0,
-      v3:+g.v3||0, v75:+g.v75||0, checkout:+g.chk||0, mpur:+g.mp||0, mrev:+g.mv||0, sales:+g.vn||0, rev:+g.rv||0 }; });
+      v3:+g.v3||0, v75:+g.v75||0, checkout:+g.chk||0, mpur:+g.mp||0, mrev:+g.mv||0, sales:+g.vn||0, rev:+g.rv||0, upSales:+g.un||0, upRev:+g.uv||0 }; });
   return S;
 }
 var META = prepMeta(D.meta);
@@ -315,8 +315,8 @@ function applyChartFilter(){ var days=filteredMetaDays(rangeFor(period)); render
 
 /* =================== OTIMIZAÇÃO (árvore) =================== */
 function prettyName(x){ return x==='SEM_RASTREIO' ? '— sem rastreio —' : x; }
-function newNode(name,full){ return {name:name,full:full,spend:0,impr:0,reach:0,clicks:0,lpv:0,v3:0,v75:0,checkout:0,mpur:0,mrev:0,sales:0,rev:0,kids:{}}; }
-function accum(n,r){ n.spend+=r.spend||0;n.impr+=r.impr||0;n.reach+=r.reach||0;n.clicks+=r.clicks||0;n.lpv+=r.lpv||0;n.v3+=r.v3||0;n.v75+=r.v75||0;n.checkout+=r.checkout||0;n.mpur+=r.mpur||0;n.mrev+=r.mrev||0;n.sales+=r.sales||0;n.rev+=r.rev||0; }
+function newNode(name,full){ return {name:name,full:full,spend:0,impr:0,reach:0,clicks:0,lpv:0,v3:0,v75:0,checkout:0,mpur:0,mrev:0,sales:0,rev:0,upSales:0,upRev:0,kids:{}}; }
+function accum(n,r){ n.spend+=r.spend||0;n.impr+=r.impr||0;n.reach+=r.reach||0;n.clicks+=r.clicks||0;n.lpv+=r.lpv||0;n.v3+=r.v3||0;n.v75+=r.v75||0;n.checkout+=r.checkout||0;n.mpur+=r.mpur||0;n.mrev+=r.mrev||0;n.sales+=r.sales||0;n.rev+=r.rev||0;n.upSales+=r.upSales||0;n.upRev+=r.upRev||0; }
 var expanded={}, treeInit=false;
 function buildTree(rows){ var c={}; rows.forEach(function(r){
   var cn=c[r.campaign]||(c[r.campaign]=newNode(prettyName(r.campaign),r.campaign)); accum(cn,r);
@@ -336,6 +336,7 @@ function metricsCells(n,medRoas,medCac){ var roas=dv(n.rev,n.spend), cac=(n.sale
   var cpm=n.impr>0?dv(n.spend,n.impr)*1000:null, ctr=n.impr>0?dv(n.clicks,n.impr)*100:null, cpc=n.clicks>0?dv(n.spend,n.clicks):null;
   var hook=n.impr>0?dv(n.v3,n.impr)*100:null, hold=n.v3>0?dv(n.v75,n.v3)*100:null;
   var lpchk=n.lpv>0?dv(n.checkout,n.lpv)*100:null, chkc=n.checkout>0?dv(n.sales,n.checkout)*100:null, convt=n.lpv>0?dv(n.sales,n.lpv)*100:null;
+  var roasOB=n.spend>0?dv(n.rev+(n.upRev||0),n.spend):null;
   return '<td class="num">'+money0(n.spend)+'</td>'
     +'<td class="num">'+(cpm!=null?money(cpm):'—')+'</td>'
     +'<td class="num">'+(ctr!=null?pct(ctr):'—')+'</td>'
@@ -350,6 +351,7 @@ function metricsCells(n,medRoas,medCac){ var roas=dv(n.rev,n.spend), cac=(n.sale
     +'<td class="num">'+(cac!=null?'<span class="cac-pill '+cacClass(cac,medCac)+'">'+money0(cac)+'</span>':'—')+'</td>'
     +'<td class="num">'+money0(n.rev)+'</td>'
     +'<td class="num">'+(n.spend>0?'<span class="roas-pill '+roasClass(roas)+'">'+roasf(roas)+'</span>':'—')+'</td>'
+    +'<td class="num">'+(roasOB!=null?'<span class="roas-pill '+roasClass(roasOB)+'" style="outline:1px solid var(--gold)">'+roasf(roasOB)+'</span>':'—')+'</td>'
     +'<td class="num"><span class="act '+tag.c+'">'+tag.t+'</span></td>'; }
 function treeRow(n,lvl,key,hasKids,medR,medC,fd){
   var caret=hasKids?'<span class="caret'+(expanded[key]?' open':'')+'">▶</span>':'<span class="caret" style="opacity:.2">•</span>';
@@ -361,7 +363,7 @@ function treeRow(n,lvl,key,hasKids,medR,medC,fd){
 }
 var treeSort={key:'rev',rev:false};
 var ACT_RANK={'Acelerar':0,'Manter':1,'Revisar':2,'Pausar':3,'s/ gasto':4,'Dado insuf.':5};
-var TREE_COLS=[{k:'name',l:'Campanha › Conjunto › Anúncio'},{k:'spend',l:'Gasto'},{k:'cpm',l:'CPM'},{k:'ctr',l:'CTR'},{k:'cpc',l:'CPC'},{k:'hook',l:'Hook'},{k:'hold',l:'Hold'},{k:'checkout',l:'Chk'},{k:'lpchk',l:'LP→Chk'},{k:'chkcompra',l:'Chk→Compra'},{k:'sales',l:'Vendas'},{k:'convtot',l:'Conv. total'},{k:'cac',l:'CPA'},{k:'rev',l:'Faturamento'},{k:'roas',l:'ROAS'},{k:'act',l:'Ação'}];
+var TREE_COLS=[{k:'name',l:'Campanha › Conjunto › Anúncio'},{k:'spend',l:'Gasto'},{k:'cpm',l:'CPM'},{k:'ctr',l:'CTR'},{k:'cpc',l:'CPC'},{k:'hook',l:'Hook'},{k:'hold',l:'Hold'},{k:'checkout',l:'Chk'},{k:'lpchk',l:'LP→Chk'},{k:'chkcompra',l:'Chk→Compra'},{k:'sales',l:'Vendas'},{k:'convtot',l:'Conv. total'},{k:'cac',l:'CPA'},{k:'rev',l:'Faturamento'},{k:'roas',l:'ROAS'},{k:'roasob',l:'ROAS c/ upsell'},{k:'act',l:'Ação'}];
 function sortValOf(key,n,medR){
   if(key==='spend') return -(n.spend||0);
   if(key==='checkout') return -(n.checkout||0);
@@ -377,6 +379,7 @@ function sortValOf(key,n,medR){
   if(key==='convtot')   return n.lpv>0?-dv(n.sales,n.lpv):Infinity;
   if(key==='cac')   return (n.sales>0&&n.spend>0)?dv(n.spend,n.sales):Infinity;
   if(key==='roas')  return n.spend>0?-dv(n.rev,n.spend):Infinity;
+  if(key==='roasob')return n.spend>0?-dv(n.rev+(n.upRev||0),n.spend):Infinity;
   if(key==='act'){ var r=ACT_RANK[actTag(n,medR).t]; return r==null?9:r; }
   return 0;
 }
@@ -404,7 +407,7 @@ function renderTree(rng){
   order.forEach(function(cK){ var c=camps[cK],cKey='c:'+cK,cHas=Object.keys(c.kids).length>0; out.push(treeRow(c,0,cKey,cHas,medR,medC,{campaign:cK}));
     if(expanded[cKey]){ skeys(c.kids).forEach(function(sK){ var sN=c.kids[sK],sKey=cKey+'|s:'+sK,sHas=Object.keys(sN.kids).length>0; out.push(treeRow(sN,1,sKey,sHas,medR,medC,{campaign:cK,adset:sK}));
       if(expanded[sKey]){ skeys(sN.kids).forEach(function(aK){ out.push(treeRow(sN.kids[aK],2,sKey+'|a:'+aK,false,medR,medC,{campaign:cK,adset:sK,ad:aK})); }); } }); } });
-  if(!out.length) out.push('<tr><td colspan="16" class="empty">Sem dados no período.</td></tr>');
+  if(!out.length) out.push('<tr><td colspan="17" class="empty">Sem dados no período.</td></tr>');
   var tEl=el('m-tree'); tEl.innerHTML=head+'<tbody>'+out.join('')+'</tbody>';
   el('m-treeLegend').innerHTML='<span><span class="act act-acel">Acelerar</span> ROAS ≥ 1,2× a mediana</span><span><span class="act act-rev">Revisar</span> ROAS ≤ 0,6×</span><span><span class="act act-pause">Pausar</span> gastou e não vendeu</span><span style="color:var(--muted2)">Hook=3s/impr · Hold=75%/3s · <b>LP→Chk</b>=checkout/view LP · <b>Chk→Compra</b>=venda/checkout · <b>Conv. total</b>=venda/view LP · clique num cabeçalho p/ ordenar</span>';
   Array.prototype.forEach.call(tEl.querySelectorAll('th.sortable'),function(th){
@@ -735,7 +738,8 @@ function v2Metrics(n){ return {
   hook:n.impr>0?n.v3/n.impr*100:null, hold:n.v3>0?n.v75/n.v3*100:null,
   txchk:n.lpv>0?n.checkout/n.lpv*100:null, txcpr:n.checkout>0?n.sales/n.checkout*100:null,
   convPag:n.lpv>0?n.sales/n.lpv*100:null, convClk:n.clicks>0?n.sales/n.clicks*100:null,
-  cac:n.sales>0?n.spend/n.sales:null, ticket:n.sales>0?n.rev/n.sales:null, roas:n.spend>0?n.rev/n.spend:null }; }
+  cac:n.sales>0?n.spend/n.sales:null, ticket:n.sales>0?n.rev/n.sales:null, roas:n.spend>0?n.rev/n.spend:null,
+  roasOB:n.spend>0?(n.rev+(n.upRev||0))/n.spend:null }; }
 function v2groupBy(rows,level){ var g={};
   rows.forEach(function(r){
     var key = level===0? r.campaign : (level===1? r.campaign+'\u0001'+r.adset : r.campaign+'\u0001'+r.adset+'\u0001'+r.ad);
@@ -817,10 +821,11 @@ function v2Table(elId,title,hint,list,level){
   var shown=list.slice(0,80);
   var medC=median(shown.map(function(o){return o.sales>0?o.spend/o.sales:null;}).filter(function(x){return x!=null;}));
   var lvlLab=['Campanha','Conjunto / Grupo','Anúncio'][level];
-  var head='<thead><tr><th>'+lvlLab+'</th><th class="num">Gasto</th><th class="num">Impr.</th><th class="num">CPM</th><th class="num">Cliques</th><th class="num">CTR</th><th class="num">CPC</th><th class="num">Hook</th><th class="num">Hold</th><th class="num">LP→Chk</th><th class="num">Chk→Cmp</th><th class="num">Conv. pág.</th><th class="num">Vendas</th><th class="num">CPA</th><th class="num">Faturamento</th><th class="num">ROAS</th></tr></thead>';
+  var head='<thead><tr><th>'+lvlLab+'</th><th class="num">Gasto</th><th class="num">Impr.</th><th class="num">CPM</th><th class="num">Cliques</th><th class="num">CTR</th><th class="num">CPC</th><th class="num">Hook</th><th class="num">Hold</th><th class="num">LP→Chk</th><th class="num">Chk→Cmp</th><th class="num">Conv. pág.</th><th class="num">Vendas</th><th class="num">CPA</th><th class="num">Faturamento</th><th class="num">ROAS</th><th class="num">ROAS c/ upsell</th></tr></thead>';
   var body=shown.map(function(o){ var m=v2Metrics(o), sel=v2SelOf(o,level);
     var cacCell=m.cac!=null?'<span class="cac-pill '+cacClass(m.cac,medC)+'">'+money0(m.cac)+'</span>':'—';
     var roasCell=m.roas!=null?'<span class="roas-pill '+roasClass(m.roas)+'">'+roasf(m.roas)+'</span>':'—';
+    var roasObCell=m.roasOB!=null?'<span class="roas-pill '+roasClass(m.roasOB)+'" style="outline:1px solid var(--gold)">'+roasf(m.roasOB)+'</span>':'—';
     return '<tr class="v2row'+(sel?' sel':'')+'" data-key="'+encodeURIComponent(o.key)+'">'
       +'<td><span class="v2name" title="'+esc(o.name)+'">'+(sel?'● ':'')+esc(o.name)+'</span></td>'
       +'<td class="num">'+money0(o.spend)+'</td>'
@@ -837,7 +842,8 @@ function v2Table(elId,title,hint,list,level){
       +'<td class="num">'+intf(o.sales)+'</td>'
       +'<td class="num">'+cacCell+'</td>'
       +'<td class="num">'+money0(o.rev)+'</td>'
-      +'<td class="num">'+roasCell+'</td></tr>'; }).join('');
+      +'<td class="num">'+roasCell+'</td>'
+      +'<td class="num">'+roasObCell+'</td></tr>'; }).join('');
   var more = list.length>shown.length ? ' <span class="hint">· top '+shown.length+' de '+list.length+' por gasto</span>' : '';
   el(elId).innerHTML='<div class="card"><div class="card-h">'+title+' <span class="hint">'+hint+'</span>'+more+'</div><div class="table-scroll"><table class="tbl v2tbl">'+head+'<tbody>'+body+'</tbody></table></div></div>';
   var byKey={}; shown.forEach(function(o){ byKey[o.key]=o; });
