@@ -51,6 +51,9 @@ function boundsOf(){
   ds.sort(); return [ds[0]||'', ds[ds.length-1]||''];
 }
 var B=boundsOf(), minDate=B[0], maxDate=B[1];
+function isoToday(){ var d=new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
+var TODAY=isoToday();
+var END_ALL=(TODAY>maxDate)?TODAY:maxDate;   // fim dos períodos "últimos X dias" = sempre inclui HOJE
 function addDays(iso,n){ var p=iso.split('-'); var dt=new Date(Date.UTC(+p[0],+p[1]-1,+p[2])); dt.setUTCDate(dt.getUTCDate()+n); return dt.toISOString().slice(0,10); }
 function daysBetween(a,b){ var pa=a.split('-'),pb=b.split('-'); return Math.round((Date.UTC(+pb[0],+pb[1]-1,+pb[2])-Date.UTC(+pa[0],+pa[1]-1,+pa[2]))/86400000); }
 function inRange(dt,r){ return dt>=r[0] && dt<=r[1]; }
@@ -58,12 +61,12 @@ var PRESETS=[{k:'hoje',label:'Hoje'},{k:'ontem',label:'Ontem'},{k:'7d',label:'7 
 var period='tudo', customRange=null;
 function rangeFor(k){
   if(k==='custom'&&customRange) return customRange;
-  if(k==='tudo') return [minDate,maxDate];
-  if(k==='hoje') return [maxDate,maxDate];
-  if(k==='ontem'){ var y=addDays(maxDate,-1); return [y,y]; }
-  if(k==='7d')  return [addDays(maxDate,-6),maxDate];
-  if(k==='30d') return [addDays(maxDate,-29),maxDate];
-  return [minDate,maxDate];
+  if(k==='tudo') return [minDate,END_ALL];
+  if(k==='hoje') return [END_ALL,END_ALL];
+  if(k==='ontem'){ var y=addDays(END_ALL,-1); return [y,y]; }
+  if(k==='7d')  return [addDays(END_ALL,-6),END_ALL];
+  if(k==='30d') return [addDays(END_ALL,-29),END_ALL];
+  return [minDate,END_ALL];
 }
 function prevRange(rng){ var len=daysBetween(rng[0],rng[1])+1; var pe=addDays(rng[0],-1); return [addDays(pe,-(len-1)),pe]; }
 
@@ -731,7 +734,7 @@ function v2AxisFmt(v){ if(v2LineMetric==='sales')return intf(Math.round(v)); if(
 function v2MetricLabel(){ return v2LineMetric==='sales'?'Vendas':(v2LineMetric==='rev'?'Faturamento':'ROAS'); }
 function v2Rows(){ return META._grain.concat(GOO._grain); }
 function v2ChMatch(r){ return v2Channel==='geral' || r.channel===v2Channel; }
-function v2RangeFor(k){ if(k==='7d')return [addDays(maxDate,-6),maxDate]; if(k==='14d')return [addDays(maxDate,-13),maxDate]; if(k==='30d')return [addDays(maxDate,-29),maxDate]; return [minDate,maxDate]; }
+function v2RangeFor(k){ if(k==='7d')return [addDays(END_ALL,-6),END_ALL]; if(k==='14d')return [addDays(END_ALL,-13),END_ALL]; if(k==='30d')return [addDays(END_ALL,-29),END_ALL]; return [minDate,END_ALL]; }
 function v2Metrics(n){ return {
   spend:n.spend,impr:n.impr,clicks:n.clicks,lpv:n.lpv,checkout:n.checkout,v3:n.v3,v75:n.v75,sales:n.sales,rev:n.rev,
   cpm:n.impr>0?n.spend/n.impr*1000:null, ctr:n.impr>0?n.clicks/n.impr*100:null, cpc:n.clicks>0?n.spend/n.clicks:null,
@@ -774,7 +777,7 @@ function v2Kpis(m){
 }
 function v2DaySeries(rows){ var bd={}; rows.forEach(function(r){ var o=bd[r.date]||(bd[r.date]={spend:0,rev:0,sales:0}); o.spend+=r.spend;o.rev+=r.rev;o.sales+=r.sales; });
   return Object.keys(bd).sort().map(function(d){ var o=bd[d]; return {date:d,label:fmtBR(d),spend:o.spend,rev:o.rev,sales:o.sales}; }); }
-function v2SeriesByDate(rows){ var bd={}; rows.forEach(function(r){ if(r.date===maxDate)return; var o=bd[r.date]||(bd[r.date]={date:r.date,spend:0,rev:0,sales:0}); o.spend+=r.spend;o.rev+=r.rev;o.sales+=r.sales; });
+function v2SeriesByDate(rows){ var bd={}; rows.forEach(function(r){ var o=bd[r.date]||(bd[r.date]={date:r.date,spend:0,rev:0,sales:0}); o.spend+=r.spend;o.rev+=r.rev;o.sales+=r.sales; });
   return Object.keys(bd).sort().map(function(d){return bd[d];}); }
 function v2Lines(groups,elId,level,onPick){
   if(!el(elId)) return;
@@ -783,7 +786,7 @@ function v2Lines(groups,elId,level,onPick){
   top.forEach(function(g){ g.series=v2SeriesByDate(g.rows); var mp={}; g.series.forEach(function(d){mp[d.date]=d;}); g.map=mp; });
   var dset={}; top.forEach(function(g){ g.series.forEach(function(d){ if(d.spend>0) dset[d.date]=1; }); });
   var dates=Object.keys(dset).sort();
-  if(!dates.length){ el(elId).innerHTML='<div class="empty">Sem dados no período p/ traçar as linhas (exclui o dia de hoje, parcial).</div>'; return; }
+  if(!dates.length){ el(elId).innerHTML='<div class="empty">Sem dados no período p/ traçar as linhas.</div>'; return; }
   var maxV=isRoas?1:0; top.forEach(function(g){ g.series.forEach(function(d){ var v=v2LineVal(d); if(v!=null&&v>maxV)maxV=v; }); }); if(maxV<=0)maxV=1;
   var W=820,H=240,pl=(v2LineMetric==='rev'?56:44),pr=14,pt=14,pb=26,pw=W-pl-pr,ph=H-pt-pb,base=pt+ph;
   var n=dates.length; function xf(i){ return pl+(n>1?pw/(n-1)*i:pw/2); } function yf(v){ return base-ph*Math.max(0,Math.min(1,v/maxV)); }
@@ -878,7 +881,7 @@ function mountV2(){
   var agg=newNode('',''); scope.forEach(function(r){ accum(agg,r); });
   el('v2Kpi').innerHTML=v2Kpis(v2Metrics(agg));
   var daysAll=v2DaySeries(scope);
-  var days = daysAll.length>1 ? daysAll.filter(function(d){return d.date!==maxDate;}) : daysAll;
+  var days = daysAll;   // inclui HOJE
   if(!days.length) days=daysAll;
   if(days.length){ el('v2Daily').innerHTML=microChart(days);
     bindHits('v2Daily',days,function(b){ return '<div class="tt-d">'+b.label+'</div><div class="tt-r"><span style="color:'+COL.vio2+'">Investimento</span><b>'+money0(b.spend)+'</b></div><div class="tt-r"><span style="color:'+COL.gold2+'">Faturamento</span><b>'+money0(b.rev)+'</b></div><div class="tt-sub">Vendas '+intf(b.sales)+' · ROAS '+roasf(dv(b.rev,b.spend))+'</div>'; }); }
