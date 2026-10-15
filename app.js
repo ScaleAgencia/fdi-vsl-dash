@@ -698,6 +698,42 @@ function renderGeral(rng,prng){
     +row('Meta Ads (c/ imposto)',COL.vio,mInvest,mSales,mRevAll)+row('Google / YouTube',COL.cy,gInvest,gSales,gRev)+'</tbody><tfoot>'+totRow+'</tfoot>';
   renderGeChart(rng);
   el('ge-daily').innerHTML=dailyStdTable(combinedDaily(rng));
+  renderUpsellConv(rng);
+}
+/* Conversão de upsell (Prosperus + Lastro) — geral e por dia (padrão MPI) */
+function renderUpsellConv(rng){
+  if(!el('ge-upconv')) return;
+  var days=META.daily.filter(function(d){return isDate(d.date)&&inRange(d.date,rng);}).sort(function(a,b){return a.date.localeCompare(b.date);});
+  var W=1120,H=240,pl=38,pr=48,pt=14,pb=26,pw=W-pl-pr,ph=H-pt-pb,base=pt+ph;
+  var maxV=Math.max.apply(null,days.map(function(d){return Math.max(d.prS||0,d.laS||0);}).concat([1]));
+  var convP=days.map(function(d){return d.sales>0?(d.prS||0)/d.sales*100:0;});
+  var convL=days.map(function(d){return d.sales>0?(d.laS||0)/d.sales*100:0;});
+  var maxC=Math.max.apply(null,convP.concat(convL).concat([1]));
+  var n=days.length||1,gw=pw/n,bw=Math.max(2,Math.min(9,gw*0.3));
+  var s='<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMid meet">';
+  [0,.5,1].forEach(function(f){ var y=pt+ph*(1-f); s+='<line x1="'+pl+'" y1="'+y+'" x2="'+(W-pr)+'" y2="'+y+'" stroke="#1a1a38" stroke-dasharray="2 3"/>';
+    s+='<text x="'+(pl-5)+'" y="'+(y+3)+'" text-anchor="end" fill="#645e8f" font-size="9">'+Math.round(maxV*f)+'</text>';
+    s+='<text x="'+(W-pr+5)+'" y="'+(y+3)+'" text-anchor="start" fill="#b99a2e" font-size="9">'+nf0.format(Math.round(maxC*f))+'%</text>'; });
+  days.forEach(function(d,i){ var xc=pl+gw*i+gw/2, ph1=ph*dv(d.prS,maxV), lh=ph*dv(d.laS,maxV);
+    if(d.prS>0) s+='<rect x="'+(xc-bw-1).toFixed(1)+'" y="'+(base-ph1).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+ph1.toFixed(1)+'" rx="1.5" fill="rgba(246,196,69,.78)"/>';
+    if(d.laS>0) s+='<rect x="'+(xc+1).toFixed(1)+'" y="'+(base-lh).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+lh.toFixed(1)+'" rx="1.5" fill="rgba(52,215,230,.82)"/>'; });
+  function ln(arr,col){ var pts=[]; days.forEach(function(d,i){ var xc=pl+gw*i+gw/2,y=base-ph*clamp(arr[i]/maxC); pts.push([xc,y]); }); if(pts.length>1) s+='<path d="M'+pts.map(function(p){return p[0].toFixed(1)+' '+p[1].toFixed(1);}).join(' L')+'" fill="none" stroke="'+col+'" stroke-width="2"/>'; }
+  ln(convP,COL.gold2); ln(convL,COL.cy2);
+  xticks(days).forEach(function(i){ var xc=pl+gw*i+gw/2; s+='<text x="'+xc.toFixed(1)+'" y="'+(H-7)+'" text-anchor="middle" fill="#645e8f" font-size="9">'+fmtBR(days[i].date)+'</text>'; });
+  s+=hitRects(days,pl,gw,pt,ph)+'</svg>';
+  el('ge-upconv-chart').innerHTML='<div class="chart">'+s+'</div><div class="chart-legend"><span><span class="dot" style="background:rgba(246,196,69,.8)"></span>Vendas Prosperus</span><span><span class="dot" style="background:rgba(52,215,230,.8)"></span>Vendas Lastro</span><span><span class="ln" style="background:'+COL.gold2+'"></span>Conv. Prosperus</span><span><span class="ln" style="background:'+COL.cy2+'"></span>Conv. Lastro</span><span style="color:var(--muted2)">conversão = vendas do upsell ÷ vendas front-end (take-rate)</span></div>';
+  bindHits('ge-upconv-chart',days,function(d){ return '<div class="tt-d">'+fmtBR(d.date)+'</div><div class="tt-r"><span style="color:'+COL.gold2+'">Prosperus</span><b>'+intf(d.prS)+' · '+pct(d.sales>0?(d.prS||0)/d.sales*100:0)+'</b></div><div class="tt-r"><span style="color:'+COL.cy2+'">Lastro</span><b>'+intf(d.laS)+' · '+pct(d.sales>0?(d.laS||0)/d.sales*100:0)+'</b></div><div class="tt-sub">Front-end '+intf(d.sales)+' vendas · Fat. upsell '+money0((d.prR||0)+(d.laR||0))+'</div>'; });
+  var rows=days.slice().sort(function(a,b){return b.date.localeCompare(a.date);});
+  var head='<thead><tr><th>Dia</th><th>Vendas FDI</th><th>Prosperus</th><th>Conv. Pros.</th><th>Lastro</th><th>Conv. Lastro</th><th>Fat. Prosperus</th><th>Fat. Lastro</th></tr></thead>';
+  var body=rows.map(function(d){ var cp=d.sales>0?(d.prS||0)/d.sales*100:null, cl=d.sales>0?(d.laS||0)/d.sales*100:null;
+    return '<tr><td>'+fmtBR(d.date)+'</td><td class="num">'+intf(d.sales)+'</td>'
+      +'<td class="num">'+((d.prS||0)>0?'<span style="color:var(--gold2);font-weight:700">'+intf(d.prS)+'</span>':'—')+'</td><td class="num">'+(cp!=null?pct(cp):'—')+'</td>'
+      +'<td class="num">'+((d.laS||0)>0?'<span style="color:var(--cy2);font-weight:700">'+intf(d.laS)+'</span>':'—')+'</td><td class="num">'+(cl!=null?pct(cl):'—')+'</td>'
+      +'<td class="num">'+money0(d.prR)+'</td><td class="num">'+money0(d.laR)+'</td></tr>'; }).join('');
+  if(!rows.length) body='<tr><td colspan="8" class="empty">Sem dados no período.</td></tr>';
+  var tfe=0,tpS=0,tpR=0,tlS=0,tlR=0; days.forEach(function(d){tfe+=d.sales||0;tpS+=d.prS||0;tpR+=d.prR||0;tlS+=d.laS||0;tlR+=d.laR||0;});
+  var foot='<tfoot><tr><td>Total</td><td class="num">'+intf(tfe)+'</td><td class="num">'+intf(tpS)+'</td><td class="num">'+(tfe>0?pct(tpS/tfe*100):'—')+'</td><td class="num">'+intf(tlS)+'</td><td class="num">'+(tfe>0?pct(tlS/tfe*100):'—')+'</td><td class="num">'+money0(tpR)+'</td><td class="num">'+money0(tlR)+'</td></tr></tfoot>';
+  el('ge-upconv').innerHTML=head+'<tbody>'+body+'</tbody>'+foot;
 }
 
 /* =================== OTIMIZAÇÃO V2 (100% filtrável) ===================

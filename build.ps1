@@ -129,7 +129,8 @@ foreach($r in $vd){
   $rev = MoneyBR $r[$V_FAT]
   $prod = Norm $r[$V_PROD]; $prodD = Deaccent $prod
   $srcD = Deaccent (Cell $r $V_SRC)
-  $isUp = ($prodD -like '*prosperus*' -or $prodD -like '*lastro*')   # upsell = Prosperus OU Lastro
+  $upKind=''; if($prodD -like '*prosperus*'){$upKind='pro'} elseif($prodD -like '*lastro*'){$upKind='las'}
+  $isUp = ($upKind -ne '')   # upsell = Prosperus OU Lastro
   $isFdiFam = ($prodD -like '*formula dos investimentos*' -or $isUp)
   # Google: venda google-ads de produto FDI -> cruza depois com as campanhas das queries Google
   if($srcD -eq 'google-ads' -and $isFdiFam){
@@ -142,7 +143,7 @@ foreach($r in $vd){
                     else { if(-not $prodCount.ContainsKey($prod)){$prodCount[$prod]=0}; $prodCount[$prod]++ } }
   $o=_ad $d
   if($isUp){ $o.upSales++; $o.upRev+=$rev } else { $o.feSales++; $o.feRev+=$rev }
-  $vslSales.Add([pscustomobject]@{ date=$d; rev=$rev; up=$isUp
+  $vslSales.Add([pscustomobject]@{ date=$d; rev=$rev; up=$isUp; upKind=$upKind
     camp=$camp; adset=(Cell $r $V_TERM); ad=(Cell $r $V_CONT); prod=$prod })
 }
 $allDailyArr=@($allDaily.Values | Sort-Object date)
@@ -178,7 +179,7 @@ foreach($r in $md){ if($r.Count -le $Q_AD){continue}
 }
 
 $daily=@{}; $grain=@{}
-function _gd($d){ if(-not $daily.ContainsKey($d)){ $daily[$d]=[pscustomobject]@{date=$d;spendRaw=0.0;spend=0.0;impr=0;reach=0;clicks=0;lpv=0;v3=0;v75=0;checkout=0;mpur=0;mrev=0.0;sales=0;rev=0.0;upSales=0;upRev=0.0} }; return $daily[$d] }
+function _gd($d){ if(-not $daily.ContainsKey($d)){ $daily[$d]=[pscustomobject]@{date=$d;spendRaw=0.0;spend=0.0;impr=0;reach=0;clicks=0;lpv=0;v3=0;v75=0;checkout=0;mpur=0;mrev=0.0;sales=0;rev=0.0;upSales=0;upRev=0.0;proS=0;proR=0.0;lasS=0;lasR=0.0} }; return $daily[$d] }
 function _gg($k,$d,$c,$s,$a){ if(-not $grain.ContainsKey($k)){ $grain[$k]=[pscustomobject]@{date=$d;campaign=$c;adset=$s;ad=$a;spendRaw=0.0;spend=0.0;impr=0;reach=0;clicks=0;lpv=0;v3=0;v75=0;checkout=0;mpur=0;mrev=0.0;sales=0;rev=0.0;upSales=0;upRev=0.0} }; return $grain[$k] }
 
 foreach($r in $md){ if($r.Count -le $Q_AD){continue}
@@ -233,7 +234,8 @@ foreach($s in $vslSales){
     else { $cName=$SENT; $sName=$SENT; $aName=$SENT }
   }
   $o=_gd $s.date; $g=_gg ($s.date+$US+$cName+$US+$sName+$US+$aName) $s.date $cName $sName $aName
-  if($s.up){ $upWin++; $upRevWin+=$s.rev; $o.upSales++; $o.upRev+=$s.rev; $g.upSales++; $g.upRev+=$s.rev }
+  if($s.up){ $upWin++; $upRevWin+=$s.rev; $o.upSales++; $o.upRev+=$s.rev; $g.upSales++; $g.upRev+=$s.rev
+    if($s.upKind -eq 'pro'){ $o.proS++; $o.proR+=$s.rev } elseif($s.upKind -eq 'las'){ $o.lasS++; $o.lasR+=$s.rev } }
   else     { $inWin++; $o.sales++; $o.rev+=$s.rev; $g.sales++; $g.rev+=$s.rev }
 }
 
@@ -258,7 +260,7 @@ foreach($g in $grainArr){
 $dOut=@()
 foreach($o in $dailyArr){
   $dOut += [pscustomobject]@{ date=$o.date; spend=[math]::Round($o.spend,2); spendRaw=[math]::Round($o.spendRaw,2); impr=[int]$o.impr; reach=[int]$o.reach; clicks=[int]$o.clicks; lpv=[int]$o.lpv
-    v3=[int]$o.v3; v75=[int]$o.v75; checkout=[int]$o.checkout; mpur=[int]$o.mpur; mrev=[math]::Round($o.mrev,2); sales=[int]$o.sales; rev=[math]::Round($o.rev,2); upSales=[int]$o.upSales; upRev=[math]::Round($o.upRev,2) }
+    v3=[int]$o.v3; v75=[int]$o.v75; checkout=[int]$o.checkout; mpur=[int]$o.mpur; mrev=[math]::Round($o.mrev,2); sales=[int]$o.sales; rev=[math]::Round($o.rev,2); upSales=[int]$o.upSales; upRev=[math]::Round($o.upRev,2); prS=[int]$o.proS; prR=[math]::Round($o.proR,2); laS=[int]$o.lasS; laR=[math]::Round($o.lasR,2) }
 }
 
 # =====================================================================
