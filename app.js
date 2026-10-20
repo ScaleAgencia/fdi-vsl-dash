@@ -770,7 +770,9 @@ function v2AxisFmt(v){ if(v2LineMetric==='sales')return intf(Math.round(v)); if(
 function v2MetricLabel(){ return v2LineMetric==='sales'?'Vendas':(v2LineMetric==='rev'?'Faturamento':'ROAS'); }
 function v2Rows(){ return META._grain.concat(GOO._grain); }
 function v2ChMatch(r){ return v2Channel==='geral' || r.channel===v2Channel; }
-function v2RangeFor(k){ if(k==='7d')return [addDays(END_ALL,-6),END_ALL]; if(k==='14d')return [addDays(END_ALL,-13),END_ALL]; if(k==='30d')return [addDays(END_ALL,-29),END_ALL]; return [minDate,END_ALL]; }
+var v2Custom=null;
+function v2RangeFor(k){ if(k==='custom'&&v2Custom)return v2Custom; if(k==='hoje')return [END_ALL,END_ALL]; if(k==='ontem'){ var y=addDays(END_ALL,-1); return [y,y]; }
+  if(k==='7d')return [addDays(END_ALL,-6),END_ALL]; if(k==='14d')return [addDays(END_ALL,-13),END_ALL]; if(k==='30d')return [addDays(END_ALL,-29),END_ALL]; return [minDate,END_ALL]; }
 function v2Metrics(n){ return {
   spend:n.spend,impr:n.impr,clicks:n.clicks,lpv:n.lpv,checkout:n.checkout,v3:n.v3,v75:n.v75,sales:n.sales,rev:n.rev,
   cpm:n.impr>0?n.spend/n.impr*1000:null, ctr:n.impr>0?n.clicks/n.impr*100:null, cpc:n.clicks>0?n.spend/n.clicks:null,
@@ -899,14 +901,17 @@ function mountV2(){
   if(!el('v2Wrap')) return;
   var rng=v2RangeFor(v2Period);
   var base=v2Rows().filter(function(r){ return isDate(r.date)&&inRange(r.date,rng)&&v2ChMatch(r); });
-  var PW=[{k:'7d',l:'7 dias'},{k:'14d',l:'14 dias'},{k:'30d',l:'30 dias'},{k:'tudo',l:'Tudo'}];
+  var PW=[{k:'hoje',l:'Hoje'},{k:'ontem',l:'Ontem'},{k:'7d',l:'7 dias'},{k:'14d',l:'14 dias'},{k:'30d',l:'30 dias'},{k:'tudo',l:'Tudo'}];
   var CH=[{k:'geral',l:'Geral'},{k:'meta',l:'Meta'}]; if(HAS_GOOGLE) CH.push({k:'google',l:'Google'});
   var clr=(v2Sel.camp!=null||v2Sel.adset!=null||v2Sel.ad!=null)?'<button class="v2clr" id="v2Clear">✕ limpar filtro</button>':'';
   el('v2Filters').innerHTML='<span class="pf-h">Período:</span>'+PW.map(function(w){return '<button data-k="'+w.k+'" class="v2btn'+(v2Period===w.k?' on':'')+'">'+w.l+'</button>';}).join('')
+    +'<span class="daterange'+(v2Period==='custom'?' on':'')+'"><span class="dr-l">De</span> <input type="date" id="v2De" min="'+minDate+'" max="'+END_ALL+'" value="'+rng[0]+'"> <span class="dr-l">até</span> <input type="date" id="v2Ate" min="'+minDate+'" max="'+END_ALL+'" value="'+rng[1]+'"></span>'
     +'<span class="pf-h pf-ch">Canal:</span>'+CH.map(function(c){return '<button data-ch="'+c.k+'" class="v2btn'+(v2Channel===c.k?' on':'')+'">'+c.l+'</button>';}).join('')
     +'<span class="pf-h pf-ch">Linhas:</span>'+V2LM.map(function(x){return '<button data-lm="'+x.k+'" class="v2btn'+(v2LineMetric===x.k?' on':'')+'">'+x.l+'</button>';}).join('')
     +clr;
-  Array.prototype.forEach.call(el('v2Filters').querySelectorAll('.v2btn[data-k]'),function(b){ b.addEventListener('click',function(){ v2Period=b.getAttribute('data-k'); mountV2(); }); });
+  Array.prototype.forEach.call(el('v2Filters').querySelectorAll('.v2btn[data-k]'),function(b){ b.addEventListener('click',function(){ v2Period=b.getAttribute('data-k'); v2Custom=null; mountV2(); }); });
+  function v2OnDate(){ var s=el('v2De').value,e=el('v2Ate').value; if(!s||!e)return; if(s>e){var t=s;s=e;e=t;} if(s<minDate)s=minDate; if(e>END_ALL)e=END_ALL; v2Custom=[s,e]; v2Period='custom'; mountV2(); }
+  el('v2De').addEventListener('change',v2OnDate); el('v2Ate').addEventListener('change',v2OnDate);
   Array.prototype.forEach.call(el('v2Filters').querySelectorAll('.v2btn[data-ch]'),function(b){ b.addEventListener('click',function(){ v2Channel=b.getAttribute('data-ch'); mountV2(); }); });
   Array.prototype.forEach.call(el('v2Filters').querySelectorAll('.v2btn[data-lm]'),function(b){ b.addEventListener('click',function(){ v2LineMetric=b.getAttribute('data-lm'); mountV2(); }); });
   if(el('v2Clear')) el('v2Clear').addEventListener('click',function(){ v2Sel={camp:null,adset:null,ad:null}; mountV2(); });
